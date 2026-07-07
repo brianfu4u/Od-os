@@ -1,7 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/common';
 import type { StaffReportInput, StaffReportResult } from '@clearview/shared';
 import { ReportsRepository } from './reports.repository';
 import { RealtimeService } from '../objects/realtime.service';
+import { VERIFICATION_HOOK, type VerificationHook } from '../verification/verification.hook';
 import { validateReportInput } from './reports.validation';
 
 @Injectable()
@@ -9,6 +10,7 @@ export class ReportsService {
   constructor(
     private readonly repo: ReportsRepository,
     private readonly realtime: RealtimeService,
+    @Optional() @Inject(VERIFICATION_HOOK) private readonly verification?: VerificationHook,
   ) {}
 
   async ingest(tenantId: string, input: StaffReportInput): Promise<StaffReportResult> {
@@ -24,6 +26,19 @@ export class ReportsService {
         type: 'Communication',
         at: new Date().toISOString(),
       });
+      // Event-driven re-score: scans/attachments are evidence → re-verify their targets (S2).
+      if (this.verification) {
+        const targets = new Set<string>();
+        for (const s of input.scans ?? []) if (s.scannedObjectId) targets.add(s.scannedObjectId);
+        for (const a of input.attachments ?? []) if (a.objectId) targets.add(a.objectId);
+        for (const id of targets) {
+          try {
+            await this.verification.verifyObject(tenantId, id);
+          } catch {
+            /* best-effort re-verification */
+          }
+        }
+      }
     }
     return result;
   }

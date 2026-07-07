@@ -240,6 +240,37 @@ size/type rejection; cross-tenant isolation.
 
 ---
 
+## S2 — cross-verification engine (the core asset)
+
+Reconciles a **claim** (a Task's `claimed_state`) against **independent evidence** into a
+`verified_state` + `confidence`, appended to the immutable `verification_ledger`, reflected
+onto the object, and surfaced live. **Deterministic + explainable** (auditable, testable);
+an LLM scorer is a pluggable seam behind the same `Scorer` interface.
+
+- **Evidence** (walked from `links` + the object's fields): QR scans (highest), snapshot/
+  document attachments (matched against `requiredEvidence`), corroborating communications,
+  SOP **timing** (too-fast vs `expectedDurationMin`), and cross-object consistency — each
+  normalized to `{ type, supports, strength, detail }` with a returned breakdown/reason.
+- **Score:** `confidence` starts at 0.76 for a matching self-claim; each independent
+  supporting item raises it toward 1 (diminishing returns). **Required-evidence gate** caps
+  at `pending`; a contradiction (contradicting evidence / cross-object / timing anomaly
+  unbacked by strong evidence) ⇒ `conflict`; else `confidence ≥ threshold` ⇒ `verified`.
+- **State machine:** `unverified → pending → verified | conflict`, recomputed each run.
+- **Triggers → Alert objects** on conflict / low-confidence / missing-required / overdue.
+- **Writes** (one `withTenant()` tx): update `objects.verified_state` + `confidence`, append
+  a `verification_ledger` row, emit **`object.state.verified`** (+ `alert.raised`), publish to
+  SSE. **Event-driven:** uploading/reporting evidence for a Task auto re-scores it (this is
+  what flips conflict→verified when the photo arrives). Also `POST /objects/:id/verify` and
+  `POST /verifications/sweep` (time-based triggers).
+
+Reproduces §4 exactly (as a test): Room-3 claim-only + missing snapshot + timing anomaly →
+**conflict @ 0.76**; snapshot uploaded → **verified @ 0.93**, two immutable ledger rows.
+
+Out of scope (later): Recommendation/Co-Pilot generation & domain agents (S3), the LLM
+scorer implementation (seam only), and manager action write-backs.
+
+---
+
 ## Ground rules
 
 - **Multi-tenant from day one** — `tenant_id` + RLS on every data table.
