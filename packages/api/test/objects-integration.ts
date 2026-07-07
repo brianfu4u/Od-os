@@ -77,10 +77,14 @@ async function main(): Promise<void> {
 
     check((await repo.softDelete(A, created.id)) === true, 'soft delete succeeds');
     const archived = await repo.get(A, created.id);
-    check(archived?.verifiedState === 'archived' && !!archived?.properties.archivedAt, 'object archived');
+    check(
+      archived?.properties.archived === true && !!archived?.properties.archivedAt,
+      'object flagged archived in properties',
+    );
+    check(archived?.verifiedState !== 'archived', 'state triplet (verified_state) left untouched');
     check(!(await repo.list(A, { type: 'Task' })).some((o) => o.id === created.id), 'default list hides archived');
     check((await repo.list(A, { type: 'Task', includeArchived: true })).some((o) => o.id === created.id), 'includeArchived shows it');
-    check((await eventCount(admin, created.id, 'object.deleted')) === 1, 'object.deleted event written');
+    check((await eventCount(admin, created.id, 'object.archived')) === 1, 'object.archived event written');
 
     const room = await repo.create(A, { type: 'Room', properties: { label: 'R1' } });
     const link = await repo.createLink(A, { fromObject: created.id, toObject: room.id, relation: 'references' });
