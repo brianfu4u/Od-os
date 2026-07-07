@@ -1,10 +1,11 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
 import type { UploadResult } from '@clearview/shared';
 import { STORAGE_PORT, type StoragePort } from '../storage/storage.provider';
 import { UploadsRepository } from './uploads.repository';
 import { RealtimeService } from '../objects/realtime.service';
+import { VERIFICATION_HOOK, type VerificationHook } from '../verification/verification.hook';
 import { detectObjectType, detectSubKind, validateUpload } from './uploads.validation';
 import { stripImageMetadata } from './image-metadata';
 
@@ -22,6 +23,7 @@ export class UploadsService {
     @Inject(STORAGE_PORT) private readonly storage: StoragePort,
     private readonly repo: UploadsRepository,
     private readonly realtime: RealtimeService,
+    @Optional() @Inject(VERIFICATION_HOOK) private readonly verification?: VerificationHook,
   ) {}
 
   async upload(
@@ -63,6 +65,15 @@ export class UploadsService {
 
     // Realtime (post-commit, tenant-filtered): the command center sees evidence land live.
     this.realtime.publish({ kind: 'created', tenantId, objectId: id, type: objectType, at: new Date().toISOString() });
+
+    // Event-driven re-score: new evidence linked to an object → re-verify it (S2). Best-effort.
+    if (opts.linkTo && this.verification) {
+      try {
+        await this.verification.verifyObject(tenantId, opts.linkTo);
+      } catch {
+        /* re-verification is best-effort; never fail the upload */
+      }
+    }
 
     return {
       objectId: id,
