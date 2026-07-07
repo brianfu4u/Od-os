@@ -93,7 +93,7 @@ export class ObjectsRepository {
         clauses.push(`type = $${params.length}`);
       }
       if (!query.includeArchived) {
-        clauses.push(`(properties->>'archivedAt') IS NULL`);
+        clauses.push(`(properties->>'archived') IS DISTINCT FROM 'true'`);
       }
       const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
       const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
@@ -149,21 +149,20 @@ export class ObjectsRepository {
   }
 
   /**
-   * Soft delete: archives the object and emits object.deleted. We do NOT hard-delete —
-   * the append-only events foreign key deliberately protects audited objects from
-   * removal, and the verification ledger must keep referring to real objects.
+   * Soft delete: sets a LIFECYCLE flag in properties (archived=true) and emits the
+   * reserved `object.archived` event. It deliberately does NOT touch the state triplet —
+   * verified_state's domain is VERIFIED_STATES and is owned by cross-verification (S2).
+   * We never hard-delete: the append-only events FK protects audited objects, and the
+   * verification ledger must keep referring to real objects.
    */
   async softDelete(tenantId: string, id: string): Promise<boolean> {
     return withTenant(tenantId, async (c) => {
       const cur = await c.query<ObjectRow>('SELECT * FROM objects WHERE id = $1', [id]);
       const existing = cur.rows[0];
       if (!existing) return false;
-      const props = { ...existing.properties, archivedAt: new Date().toISOString() };
-      await c.query(`UPDATE objects SET properties = $2::jsonb, verified_state = 'archived' WHERE id = $1`, [
-        id,
-        JSON.stringify(props),
-      ]);
-      await this.recordEvent(c, tenantId, id, 'object.deleted', {});
+      const props = { ...existing.properties, archived: true, archivedAt: new Date().toISOString() };
+      await c.query(`UPDATE objects SET properties = $2::jsonb WHERE id = $1`, [id, JSON.stringify(props)]);
+      await this.recordEvent(c, tenantId, id, 'object.archived', {});
       return true;
     });
   }
