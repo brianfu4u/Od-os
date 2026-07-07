@@ -8,3 +8,4 @@
  */
 export * from './ontology/objects';
 export * from './ontology/events';
+export * from './api/objects.contract';
