@@ -1,0 +1,48 @@
+{
+  "app": {
+    "title": "Clearview OD",
+    "subtitle": "眼科诊所实时运营操作系统",
+    "badge": "Sprint 0 · 骨架"
+  },
+  "loop": {
+    "label": "智能体循环",
+    "stages": {
+      "sense": "感知",
+      "map": "映射",
+      "verify": "交叉验证",
+      "reason": "推理",
+      "recommend": "建议",
+      "act": "执行",
+      "learn": "学习"
+    }
+  },
+  "cc": {
+    "heading": "指挥官命令中心",
+    "tagline": "六大域 · 带证据的建议 · 人在环"
+  },
+  "domains": {
+    "staff": "员工",
+    "patients": "患者",
+    "financial": "财务",
+    "marketing": "营销",
+    "equipment": "设备",
+    "inventory": "库存",
+    "pending": "待接入真实数据"
+  },
+  "cues": {
+    "title": "指挥提示",
+    "empty": "暂无待处理建议 — 骨架已就绪,等待接入真实数据与交叉验证。"
+  },
+  "storage": {
+    "label": "本地偏好(localStorage 兜底演示)",
+    "note": "即使浏览器禁用存储,应用也不会崩溃(try/catch 兜底)。",
+    "available": "存储可用",
+    "unavailable": "存储不可用 — 已优雅降级,不影响使用",
+    "pick": "选择关注的域:",
+    "saved": "已保存偏好:{value}"
+  },
+  "footer": {
+    "synthetic": "仅使用合成、隐私安全数据 — 不含任何真实患者信息(PHI)。",
+    "sprint": "Clearview OD · Sprint 0 可部署骨架"
+  }
+}
