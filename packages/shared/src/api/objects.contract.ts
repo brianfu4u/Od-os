@@ -37,7 +37,7 @@ export interface CreateLinkInput {
 }
 
 /** Realtime object-change notification streamed over SSE (GET /objects/stream). */
-export type ObjectChangeKind = 'created' | 'updated' | 'deleted';
+export type ObjectChangeKind = 'created' | 'updated' | 'archived';
 
 export interface ObjectChangeEvent {
   kind: ObjectChangeKind;
