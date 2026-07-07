@@ -17,7 +17,8 @@
     "test:objects": "tsx test/objects-integration.ts",
     "test:reports": "tsx test/reports-integration.ts",
     "test:uploads": "tsx test/uploads-integration.ts",
-    "test:verification": "tsx test/verification-integration.ts"
+    "test:verification": "tsx test/verification-integration.ts",
+    "test:recommendations": "tsx test/recommendation-integration.ts"
   },
   "dependencies": {
     "@clearview/shared": "workspace:*",
