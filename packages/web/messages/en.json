@@ -1,0 +1,48 @@
+{
+  "app": {
+    "title": "Clearview OD",
+    "subtitle": "Real-time operating system for optometry clinics",
+    "badge": "Sprint 0 · Skeleton"
+  },
+  "loop": {
+    "label": "Agentic loop",
+    "stages": {
+      "sense": "Sense",
+      "map": "Map",
+      "verify": "Cross-verify",
+      "reason": "Reason",
+      "recommend": "Recommend",
+      "act": "Act",
+      "learn": "Learn"
+    }
+  },
+  "cc": {
+    "heading": "Commander Command Center",
+    "tagline": "Six domains · evidence-backed advice · human-in-the-loop"
+  },
+  "domains": {
+    "staff": "Staff",
+    "patients": "Patients",
+    "financial": "Financial",
+    "marketing": "Marketing",
+    "equipment": "Equipment",
+    "inventory": "Inventory",
+    "pending": "Awaiting live data"
+  },
+  "cues": {
+    "title": "Conductor cues",
+    "empty": "No cues yet — the skeleton is ready, waiting for live data and cross-verification."
+  },
+  "storage": {
+    "label": "Local preference (localStorage fallback demo)",
+    "note": "Even if the browser blocks storage, the app never crashes (try/catch guarded).",
+    "available": "Storage available",
+    "unavailable": "Storage unavailable — gracefully degraded",
+    "pick": "Pick a focus domain:",
+    "saved": "Saved preference: {value}"
+  },
+  "footer": {
+    "synthetic": "Synthetic, privacy-safe data only — no real patient information (PHI).",
+    "sprint": "Clearview OD · Sprint 0 deployable skeleton"
+  }
+}
