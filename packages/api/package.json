@@ -14,7 +14,8 @@
     "db:seed": "tsx db/seed.ts",
     "db:reset": "tsx db/reset.ts",
     "test:rls": "tsx test/rls-isolation.ts",
-    "test:objects": "tsx test/objects-integration.ts"
+    "test:objects": "tsx test/objects-integration.ts",
+    "test:reports": "tsx test/reports-integration.ts"
   },
   "dependencies": {
     "@clearview/shared": "workspace:*",
