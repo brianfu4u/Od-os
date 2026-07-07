@@ -1,0 +1,41 @@
+{
+  "name": "clearview-od",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Clearview OD — real-time operating system for optometry clinics (ontology-first, multi-tenant).",
+  "packageManager": "pnpm@10.34.3",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,cjs,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,cjs,json,md,yml,yaml}\"",
+    "db:migrate": "pnpm --filter @clearview/api db:migrate",
+    "db:seed": "pnpm --filter @clearview/api db:seed",
+    "db:reset": "pnpm --filter @clearview/api db:reset",
+    "db:test": "pnpm --filter @clearview/api test:rls"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@swc/core",
+      "esbuild",
+      "sharp",
+      "@tailwindcss/oxide",
+      "unrs-resolver"
+    ]
+  }
+}
