@@ -142,6 +142,45 @@ UPDATE/DELETE.
 
 ---
 
+## S1-1 — object API, events & realtime
+
+The `api` exposes the ontology object API the frontend and later tickets consume.
+**Multi-tenancy:** every request sends an `X-Tenant-Id` header (a UUID) — a **dev-only**
+stand-in until auth/session lands in **S0-3**. The guard is hard-disabled when
+`NODE_ENV=production`; S0-3 will derive the tenant from the authenticated session and
+reject any client-supplied id. The header only *names* the tenant; all queries run
+through `withTenant()`, so **RLS is the real isolation boundary**.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/objects` | Create (`type` required; per-type fields in `properties`). |
+| `GET` | `/objects` | List/query — `?type=&limit=&offset=&includeArchived=`. |
+| `GET` | `/objects/:id` | Fetch one. |
+| `PATCH` | `/objects/:id` | Update the state triplet and/or shallow-merge `properties`. |
+| `DELETE` | `/objects/:id` | **Soft delete** (see below). |
+| `POST` | `/links` | Create a tenant-scoped link between two objects. |
+| `GET` | `/objects/stream` | **SSE** stream of object changes for the tenant. |
+
+- **Events-on-change:** every create/update/delete writes an append-only `events` row
+  in the *same transaction* — the audit trail and the agentic-loop signal.
+- **Soft delete (deliberate):** `DELETE` archives the object (`properties.archived=true`
+  + `archivedAt`) and emits the reserved `object.archived` event. It never hard-deletes
+  (the append-only `events` FK protects audited objects) and does **not** touch the state
+  triplet — `verified_state` stays owned by cross-verification (S2).
+- **Realtime:** an in-process bus fans changes to the SSE endpoint per tenant (swap for
+  Postgres `LISTEN/NOTIFY` when the api runs multi-instance).
+
+```bash
+curl -X POST localhost:3001/objects -H 'content-type: application/json' \
+  -H 'X-Tenant-Id: 11111111-1111-1111-1111-111111111111' \
+  -d '{"type":"Task","properties":{"taskType":"room_turnover"},"expectedState":"ready"}'
+```
+
+Validated in-sandbox: the full object integration suite (CRUD, event-on-change,
+cross-tenant isolation, archive) alongside the S0-2 RLS suite.
+
+---
+
 ## Ground rules
 
 - **Multi-tenant from day one** — `tenant_id` + RLS on every data table.

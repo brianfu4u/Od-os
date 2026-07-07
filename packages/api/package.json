@@ -13,7 +13,8 @@
     "db:migrate": "tsx db/migrate.ts",
     "db:seed": "tsx db/seed.ts",
     "db:reset": "tsx db/reset.ts",
-    "test:rls": "tsx test/rls-isolation.ts"
+    "test:rls": "tsx test/rls-isolation.ts",
+    "test:objects": "tsx test/objects-integration.ts"
   },
   "dependencies": {
     "@clearview/shared": "workspace:*",
