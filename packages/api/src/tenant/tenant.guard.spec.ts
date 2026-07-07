@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isUuid } from './tenant.guard';
+import { isUuid, headerTenantAllowed } from './tenant.guard';
 
 describe('isUuid', () => {
   it('accepts valid UUIDs', () => {
@@ -11,5 +11,14 @@ describe('isUuid', () => {
     expect(isUuid('')).toBe(false);
     expect(isUuid(undefined)).toBe(false);
     expect(isUuid(12345)).toBe(false);
+  });
+});
+
+describe('headerTenantAllowed', () => {
+  it('permits the header stand-in only outside production', () => {
+    expect(headerTenantAllowed('development')).toBe(true);
+    expect(headerTenantAllowed('test')).toBe(true);
+    expect(headerTenantAllowed(undefined)).toBe(true);
+    expect(headerTenantAllowed('production')).toBe(false);
   });
 });
