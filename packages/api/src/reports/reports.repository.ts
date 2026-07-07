@@ -92,6 +92,20 @@ export class ReportsRepository {
         }
       }
 
+      // 7) Attachment evidence (upload-first S1-3): link resolved uploaded objects + mark attached.
+      for (const att of input.attachments ?? []) {
+        if (att.objectId) {
+          const exists = await c.query(`SELECT 1 FROM objects WHERE id = $1`, [att.objectId]);
+          if (exists.rows[0]) {
+            await this.link(c, tenantId, communicationId, att.objectId);
+            await c.query(
+              `INSERT INTO events (tenant_id, object_id, event_type, payload, actor) VALUES ($1, $2, 'evidence.attached', $3::jsonb, 'reports')`,
+              [tenantId, att.objectId, JSON.stringify({ communicationId })],
+            );
+          }
+        }
+      }
+
       return { communicationId, staffId, deduped: false };
     });
   }

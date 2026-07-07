@@ -210,6 +210,36 @@ curl -X POST localhost:3001/reports -H 'content-type: application/json' \
 
 ---
 
+## S1-3 — evidence uploads (Document / Snapshot)
+
+Photos / screenshots / voice clips / docs uploaded by the Mini Program become evidence
+objects, closing the S1-2 chain. **`POST /uploads`** (multipart `file`; optional `kind`,
+`linkTo`, `relation`): validates **per-kind size** (image 10 MB · audio/doc 20 MB) + a
+content-type allowlist (incl. WeChat voice `amr`/`m4a`/`aac`), **strips EXIF/GPS from
+images**, computes `sha256` (dedups identical bytes per tenant), streams bytes to object
+storage at a **tenant-prefixed key** (`tenant/<id>/…`, outside any DB tx), then via
+`withTenant()` creates a **Snapshot** (images → `kind` photo/screenshot) or **Document**
+(audio → `voice`; pdf/doc) with `{ kind, mime, size, storageKey, originalName, sha256 }`,
+optionally linking it `references` → a Communication/Task. Emits `object.created`
+(+ `link.created`, `evidence.attached` when linked) and publishes to the SSE stream so the
+command center sees evidence land live.
+
+**Downloads only via short-lived signed URLs:** `GET /uploads/:id/url` does an RLS-checked
+lookup and mints a signed URL; `GET /uploads/content?...` serves bytes only for a valid,
+unexpired signature — no public bucket URLs, and one tenant can never fetch another's bytes.
+
+Storage sits behind a `StoragePort` (put / getSignedUrl / head / read) — **dev** = local
+disk (`UPLOAD_DIR`, HMAC-signed URLs via `UPLOAD_URL_SECRET`); **prod** swaps in **Tencent
+COS** (China + WeChat) / MinIO / S3 with native presigned URLs, no logic change. Auth reuses
+the dev-only tenant guard (TODO S0-3 session). Out of scope (schema-compatible follow-ons):
+voice→text, QR-code resolution, AV scanning, presigned direct-to-COS upload.
+
+Validated in-sandbox: upload → Snapshot/Document with sha256; tenant-prefixed keys; EXIF/GPS
+stripped; signed-URL round-trip; dedup; link + `evidence.attached` events; per-kind
+size/type rejection; cross-tenant isolation.
+
+---
+
 ## Ground rules
 
 - **Multi-tenant from day one** — `tenant_id` + RLS on every data table.

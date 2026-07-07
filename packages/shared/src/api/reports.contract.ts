@@ -20,7 +20,9 @@ export interface ReportAttachment {
   /** image | audio | screenshot | … (open string for forward-compat). */
   kind: string;
   /** Storage reference/URI. Actual upload handling is S1-3; here it is just a ref. */
-  ref: string;
+  ref?: string;
+  /** Uploaded evidence object id (S1-3). When resolved in-tenant, the report links to it. */
+  objectId?: string;
   mimeType?: string;
   caption?: string;
 }
