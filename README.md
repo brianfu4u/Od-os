@@ -181,6 +181,35 @@ cross-tenant isolation, archive) alongside the S0-2 RLS suite.
 
 ---
 
+## S1-2 — staff report ingest (WeChat Mini Program terminal)
+
+The staff terminal is a **WeChat Mini Program** (not a third-party IM). It POSTs
+structured reports to **`POST /reports`**, which — via `withTenant()` — creates a
+`Communication` object, resolves/provisions the author `Staff`, records events, and links
+QR-scan evidence. **Idempotent** by `clientMessageId` (per tenant), so client retries
+never duplicate.
+
+Payload (`StaffReportInput` in `@clearview/shared`): `reportType` (clock_in / clock_out /
+task_update / event / evidence / scan), `text`, structured `fields`, `attachments`
+(image / audio / screenshot refs — upload is S1-3), and `scans` (`scannedObjectType` +
+`scannedObjectId`/`code` + `at`). **QR scans are first-class evidence:** a resolved
+`scannedObjectId` gets a `references` link to the scanned object for cross-verification (S2).
+
+```bash
+curl -X POST localhost:3001/reports -H 'content-type: application/json' \
+  -H 'X-Tenant-Id: 11111111-1111-1111-1111-111111111111' \
+  -d '{"clientMessageId":"m-1","reportType":"scan","staffHandle":"openid-a1",
+       "scans":[{"scannedObjectType":"Visit","scannedObjectId":"<id>","at":"2026-07-07T09:00:00Z"}]}'
+```
+
+> **Auth is dev-only for now.** Tenant comes from the env-gated `X-Tenant-Id` header and
+> the staff identity from `staffHandle` in the body. **TODO(S0-3):** both must derive from
+> the `wx.login`/openid session and never be trusted from the client. The Mini Program is
+> its own front-end workstream (Mini Program account; prod API domain likely needs ICP
+> filing). Voice→text and QR-code resolution are separate follow-on tickets.
+
+---
+
 ## Ground rules
 
 - **Multi-tenant from day one** — `tenant_id` + RLS on every data table.
