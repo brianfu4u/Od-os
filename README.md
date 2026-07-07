@@ -271,6 +271,35 @@ scorer implementation (seam only), and manager action write-backs.
 
 ---
 
+## S3 — domain agents + orchestrator (the Co-Pilot)
+
+Turns S2 verifications/Alerts into **ranked, evidence-backed manager cues**. Deterministic
+first (an LLM re-ranker is a clean seam); **human-in-the-loop** — S3 only proposes.
+
+- **Domain agents** (patient-flow, staff, inventory; equipment/financial/marketing next) are
+  deterministic detectors over the ontology. Each emits candidate `Recommendation`s from
+  Alerts/verifications with `{ title, why, evidence[], confidence, proposedActions[], addresses }`.
+- **Conductor orchestrator** de-duplicates, **de-conflicts** cross-domain contention (annotating
+  the trade-off — e.g. pulling a tech to pretest vs. leaving optical uncovered), **ranks** by
+  severity × urgency × impact, caps the feed, and computes an **Operating Tempo** score.
+- **Recommendation** objects link `--addresses-->` the Alert and `--references-->` the subject;
+  `recommendation.created` is emitted and pushed via SSE.
+- **API:** `GET /recommendations?status=&limit=` (ranked feed) · `GET /recommendations/tempo` ·
+  `POST /recommendations/:id/{approve|dismiss|snooze}` — records intent + emits an event, **no
+  world write** in S3 (execution is S4).
+
+**Event seam** (closes the loop; absorbs the deferred S2 wire): an in-process `DomainEventBus`
+— `object.state.claimed → verifyObject`, and `verification.completed → agents → orchestrator →
+cue`. Handlers awaited in order (deterministic, testable); swap for Postgres `LISTEN/NOTIFY`
+when multi-instance.
+
+End-to-end (test): Room-3 conflict → the patient-flow agent's cue appears in the feed with the
+verification as evidence; approve moves it out of the open feed; cross-tenant isolated.
+
+Out of scope (S4+): executing approved actions (write-backs) and the LLM cue re-ranker/phrasing.
+
+---
+
 ## Ground rules
 
 - **Multi-tenant from day one** — `tenant_id` + RLS on every data table.
