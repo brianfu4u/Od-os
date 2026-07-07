@@ -1,6 +1,7 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { VerificationResult } from '@clearview/shared';
 import { RealtimeService } from '../objects/realtime.service';
+import { DomainEventBus } from '../events/domain-event-bus';
 import { VerificationRepository } from './verification.repository';
 import { SCORER, type Scorer } from './scorer';
 
@@ -10,7 +11,11 @@ export class VerificationService {
     @Inject(SCORER) private readonly scorer: Scorer,
     private readonly repo: VerificationRepository,
     private readonly realtime: RealtimeService,
-  ) {}
+    @Optional() private readonly bus?: DomainEventBus,
+  ) {
+    // Event seam (absorbs the deferred S2-Q2 wire): a new claim → auto-verify.
+    this.bus?.on('object.state.claimed', (e) => this.verifyObject(e.tenantId, e.objectId).then(() => undefined));
+  }
 
   /** Re-entrant, idempotent (re)verification of one object. Appends a ledger row each run. */
   async verifyObject(tenantId: string, objectId: string): Promise<VerificationResult | null> {
@@ -23,6 +28,13 @@ export class VerificationService {
       objectId,
       type: outcome.objectType,
       at: new Date().toISOString(),
+    });
+    // Fan out to the domain agents (S3): verified/conflict/overdue → ranked cues.
+    await this.bus?.publish({
+      type: 'verification.completed',
+      tenantId,
+      objectId,
+      payload: { verifiedState: outcome.result.verifiedState, triggered: outcome.result.triggered },
     });
     return outcome.result;
   }
