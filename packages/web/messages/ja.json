@@ -1,0 +1,48 @@
+{
+  "app": {
+    "title": "Clearview OD",
+    "subtitle": "眼科クリニック向けリアルタイム運営OS",
+    "badge": "Sprint 0 · スケルトン"
+  },
+  "loop": {
+    "label": "エージェントループ",
+    "stages": {
+      "sense": "感知",
+      "map": "マッピング",
+      "verify": "クロス検証",
+      "reason": "推論",
+      "recommend": "提案",
+      "act": "実行",
+      "learn": "学習"
+    }
+  },
+  "cc": {
+    "heading": "コマンダー・コマンドセンター",
+    "tagline": "6ドメイン · 証拠に基づく提案 · 人間が最終判断"
+  },
+  "domains": {
+    "staff": "スタッフ",
+    "patients": "患者",
+    "financial": "財務",
+    "marketing": "マーケティング",
+    "equipment": "設備",
+    "inventory": "在庫",
+    "pending": "実データ接続待ち"
+  },
+  "cues": {
+    "title": "指揮キュー",
+    "empty": "キューはまだありません — スケルトンは準備完了、実データとクロス検証を待機中。"
+  },
+  "storage": {
+    "label": "ローカル設定(localStorage フォールバックのデモ)",
+    "note": "ブラウザがストレージを無効化してもアプリはクラッシュしません(try/catch 保護)。",
+    "available": "ストレージ利用可能",
+    "unavailable": "ストレージ利用不可 — 正常に降格",
+    "pick": "注目ドメインを選択:",
+    "saved": "設定を保存しました:{value}"
+  },
+  "footer": {
+    "synthetic": "合成された安全なデータのみを使用 — 実際の患者情報(PHI)は含みません。",
+    "sprint": "Clearview OD · Sprint 0 デプロイ可能スケルトン"
+  }
+}
