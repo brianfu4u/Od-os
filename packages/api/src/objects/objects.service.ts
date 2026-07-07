@@ -60,7 +60,7 @@ export class ObjectsService {
     if (!existing) throw new NotFoundException('object not found');
     await this.repo.softDelete(tenantId, id);
     this.realtime.publish({
-      kind: 'deleted',
+      kind: 'archived',
       tenantId,
       objectId: id,
       type: existing.type,
