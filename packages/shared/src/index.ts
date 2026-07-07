@@ -11,3 +11,4 @@ export * from './ontology/events';
 export * from './api/objects.contract';
 export * from './api/reports.contract';
 export * from './api/uploads.contract';
+export * from './api/verification.contract';
