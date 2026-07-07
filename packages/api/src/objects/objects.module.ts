@@ -8,5 +8,6 @@ import { RealtimeService } from './realtime.service';
 @Module({
   controllers: [ObjectsController, LinksController],
   providers: [ObjectsService, ObjectsRepository, RealtimeService],
+  exports: [RealtimeService],
 })
 export class ObjectsModule {}
