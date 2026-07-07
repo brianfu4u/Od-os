@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import type {
   OntologyObject,
   OntologyLink,
@@ -9,12 +9,14 @@ import type {
 } from '@clearview/shared';
 import { ObjectsRepository } from './objects.repository';
 import { RealtimeService } from './realtime.service';
+import { DomainEventBus } from '../events/domain-event-bus';
 
 @Injectable()
 export class ObjectsService {
   constructor(
     private readonly repo: ObjectsRepository,
     private readonly realtime: RealtimeService,
+    @Optional() private readonly bus?: DomainEventBus,
   ) {}
 
   async create(tenantId: string, input: CreateObjectInput): Promise<OntologyObject> {
@@ -52,6 +54,15 @@ export class ObjectsService {
       type: obj.type,
       at: obj.updatedAt,
     });
+    // A new/changed claim triggers the verification → recommendation loop (S3 event seam).
+    if (input?.claimedState !== undefined) {
+      await this.bus?.publish({
+        type: 'object.state.claimed',
+        tenantId,
+        objectId: obj.id,
+        payload: { claimedState: obj.claimedState },
+      });
+    }
     return obj;
   }
 
