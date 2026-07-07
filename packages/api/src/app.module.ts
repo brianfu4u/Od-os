@@ -5,6 +5,7 @@ import { DatabaseModule } from './database/database.module';
 import { ObjectsModule } from './objects/objects.module';
 import { ReportsModule } from './reports/reports.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { VerificationModule } from './verification/verification.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { UploadsModule } from './uploads/uploads.module';
     ObjectsModule,
     ReportsModule,
     UploadsModule,
+    VerificationModule,
   ],
   controllers: [HealthController],
 })
