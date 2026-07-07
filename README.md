@@ -210,6 +210,25 @@ curl -X POST localhost:3001/reports -H 'content-type: application/json' \
 
 ---
 
+## S1-3 — evidence uploads (Document / Snapshot)
+
+Files / photos / voice clips uploaded by the Mini Program become evidence objects,
+closing the S1-2 evidence chain. **`POST /uploads`** (multipart `file`; optional `kind`,
+`linkTo`) validates size (≤ 10 MB) and a content-type allowlist, stores the bytes, then
+via `withTenant()` creates a **Snapshot** (images) or **Document** (other types) object
+carrying `storageRef` / `mimeType` / `size`, and optionally links it `references` → a
+Communication or Task. **`GET /uploads/:id/content`** streams the bytes back, tenant-scoped.
+
+Storage sits behind a `StorageProvider` interface — **dev** writes to local disk
+(`UPLOAD_DIR`); **prod** swaps in object storage (Tencent COS / Aliyun OSS / S3), ideally
+with presigned direct upload (a decision to confirm). Auth reuses the dev-only tenant
+guard (TODO S0-3 session).
+
+Validated in-sandbox: upload → Snapshot/Document, evidence→subject link, byte round-trip,
+size/type rejection, and cross-tenant isolation.
+
+---
+
 ## Ground rules
 
 - **Multi-tenant from day one** — `tenant_id` + RLS on every data table.
