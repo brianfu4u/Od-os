@@ -1,14 +1,21 @@
 {
   "app": {
-    "title": "Clearview OD",
+    "title": "Clearview 眼科 · 指令センター",
     "subtitle": "眼科クリニック向けリアルタイム運営OS",
-    "badge": "Sprint 0 · スケルトン"
+    "badge": "ライブ · 合成デモ",
+    "navConsole": "スタッフ端末"
+  },
+  "feed": {
+    "live": "ライブ接続",
+    "connecting": "接続中…",
+    "offline": "オフライン"
   },
   "loop": {
     "label": "エージェントループ",
+    "gate": "承認",
     "stages": {
       "sense": "感知",
-      "map": "マッピング",
+      "map": "オントロジーへ写像",
       "verify": "クロス検証",
       "reason": "推論",
       "recommend": "提案",
@@ -16,9 +23,25 @@
       "learn": "学習"
     }
   },
+  "podium": {
+    "tempo": "運営テンポ",
+    "tempoGood": "良好なリズム",
+    "tempoWatch": "要注意",
+    "tempoAct": "要対応",
+    "branch": "分院",
+    "commander": "指揮",
+    "kpi": {
+      "activeTasks": "進行中タスク",
+      "onTime": "定刻率",
+      "conflicts": "未確認の矛盾",
+      "openCues": "未処理の提案"
+    }
+  },
   "cc": {
-    "heading": "コマンダー・コマンドセンター",
-    "tagline": "6ドメイン · 証拠に基づく提案 · 人間が最終判断"
+    "domainsHeading": "360° 運営状態",
+    "domainsTagline": "6ドメイン · リアルタイム件数",
+    "offline": "バックエンドAPI({base})に接続できません。先に起動してください:pnpm --filter @clearview/api dev(マイグレーションとシード適用済み)。",
+    "retry": "再試行"
   },
   "domains": {
     "staff": "スタッフ",
@@ -27,11 +50,97 @@
     "marketing": "マーケティング",
     "equipment": "設備",
     "inventory": "在庫",
-    "pending": "実データ接続待ち"
+    "status": {
+      "steady": "安定",
+      "watch": "注視",
+      "action": "対応"
+    },
+    "metrics": {
+      "onDuty": "在勤",
+      "cues": "提案",
+      "activeTasks": "進行中タスク",
+      "overdue": "超過",
+      "invoices": "未請求",
+      "leads": "リード",
+      "campaigns": "施策",
+      "equipment": "設備台数",
+      "lowStock": "在庫僅少",
+      "items": "品目"
+    },
+    "notes": {
+      "staff": "配置は均衡、異常なし",
+      "patients": "患者フロー安定",
+      "financial": "会計は正常",
+      "marketing": "集客は安定",
+      "equipment": "設備は正常",
+      "inventory": "在庫は十分"
+    },
+    "noteAction": "{n} 件の提案が未処理",
+    "noteWatch": "要注意:未確認項目あり"
   },
   "cues": {
-    "title": "指揮キュー",
-    "empty": "キューはまだありません — スケルトンは準備完了、実データとクロス検証を待機中。"
+    "title": "AI 副操縦士 · 提案",
+    "subtitle": "証拠に基づく · 人間が最終承認",
+    "empty": "未処理の提案はありません — スタッフ端末から報告や証拠をアップロードするとループが動きます。",
+    "why": "理由",
+    "confidence": "信頼度",
+    "source": "発生エージェント",
+    "approve": "承認",
+    "dismiss": "却下",
+    "snooze": "後で",
+    "tradeoff": "トレードオフ",
+    "proposed": "提案アクション",
+    "priority": {
+      "high": "高優先度",
+      "med": "中優先度",
+      "low": "低優先度"
+    }
+  },
+  "agents": {
+    "patient_flow": "患者フロー",
+    "staff": "スタッフ",
+    "inventory": "在庫",
+    "equipment": "設備",
+    "financial": "財務",
+    "marketing": "マーケティング"
+  },
+  "ledger": {
+    "title": "クロス検証台帳",
+    "subtitle": "主張 → 証拠 → 判定",
+    "empty": "検証記録はまだありません。",
+    "states": {
+      "verified": "検証済み",
+      "pending": "保留",
+      "conflict": "矛盾",
+      "unverified": "未検証"
+    },
+    "evidenceKinds": {
+      "qr_scan": "スキャン",
+      "snapshot": "スナップ",
+      "document": "文書",
+      "communication": "連絡",
+      "timing": "時系列",
+      "cross_object": "相互参照"
+    }
+  },
+  "comms": {
+    "title": "リアルタイム連絡",
+    "subtitle": "スタッフ報告 · クロス検証へ投入",
+    "listening": "LLM 監視中",
+    "empty": "連絡はまだありません。",
+    "reportTypes": {
+      "clock_in": "出勤打刻",
+      "clock_out": "退勤打刻",
+      "task_update": "タスク更新",
+      "event": "イベント",
+      "evidence": "証拠",
+      "scan": "スキャン"
+    },
+    "annScan": "スキャンを一級の検証証拠として取り込み",
+    "annEvidence": "添付を証拠としてリンク",
+    "annTask": "タスク状態を更新し再検証を実行",
+    "annClock": "勤怠を記録",
+    "annDefault": "クロス検証に取り込み"
   },
   "storage": {
     "label": "ローカル設定(localStorage フォールバックのデモ)",
@@ -43,6 +152,44 @@
   },
   "footer": {
     "synthetic": "合成された安全なデータのみを使用 — 実際の患者情報(PHI)は含みません。",
-    "sprint": "Clearview OD · Sprint 0 デプロイ可能スケルトン"
+    "sprint": "Clearview OD · 指令センター(ライブ · デモ)"
+  },
+  "console": {
+    "title": "スタッフ端末(WeChat ミニプログラム代替)",
+    "subtitle": "ミニプログラムと同一のペイロードで報告 / アップロード / スキャンし、ライブループを駆動します。",
+    "back": "← 指令センターへ戻る",
+    "subject": "対象オブジェクト",
+    "noObjects": "選択可能なオブジェクトなし(先にシードを実行)",
+    "reverify": "選択オブジェクトを再検証",
+    "refresh": "更新",
+    "reportCard": "イベント報告",
+    "reportHint": "連絡を作成します。チェックすると対象へのスキャンを添付しクロス検証を起動します。",
+    "reportType": "報告タイプ",
+    "message": "内容",
+    "staffName": "スタッフ名(開発環境のみ)",
+    "scanSubject": "対象のスキャンを添付(証拠として)",
+    "sendReport": "報告を送信",
+    "uploadCard": "証拠をアップロード",
+    "uploadHint": "写真 / 文書をアップロードし、対象にリンクして再検証を起動できます。",
+    "file": "ファイル",
+    "kind": "種類",
+    "kinds": {
+      "photo": "写真",
+      "screenshot": "スクショ",
+      "document": "文書",
+      "pdf": "PDF"
+    },
+    "linkUpload": "選択オブジェクトにリンク",
+    "sendUpload": "アップロード",
+    "activity": "アクティビティログ",
+    "activityEmpty": "操作はまだありません。",
+    "report": "報告",
+    "upload": "アップロード",
+    "verify": "検証",
+    "created": "作成",
+    "deduped": "重複排除",
+    "noFile": "先にファイルを選択してください。",
+    "loadFailed": "オブジェクトの読み込みに失敗",
+    "devNote": "開発環境:テナントは X-Tenant-Id で伝達。本番は wx.login/openid セッション(S0-3)を用い、クライアント提供の識別情報は信頼しません。"
   }
 }
