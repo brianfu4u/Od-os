@@ -67,7 +67,10 @@ pnpm dev
 
 | Variable | Used by | Example |
 |---|---|---|
-| `DATABASE_URL` | migrations, seed, api | `postgresql://postgres:postgres@localhost:5432/clearview_od` |
+| `DATABASE_URL` | migrations, seed, tests (owner) | `postgresql://postgres:postgres@localhost:5432/clearview_od` |
+| `APP_DATABASE_URL` | api runtime (least-privilege) | `postgresql://clearview_login:...@host:5432/clearview_od` — **required in production**; dev derives it from `DATABASE_URL`. |
+| `APP_DB_PASSWORD` | api (dev derive) | dev default for the derived `clearview_login` connection |
+| `WX_APPID` / `WX_APPSECRET` | api (staff wx-login) | WeChat Mini Program credentials (founder dependency; wx-login returns 501 until set) |
 | `API_PORT` | api | `3001` |
 | `NEXT_PUBLIC_API_BASE_URL` | web | `http://localhost:3001` |
 
@@ -115,8 +118,9 @@ A **generic object store** (not per-type tables). Per-type fields live in
 
 ### Multi-tenancy / RLS model
 
-The API never queries as a superuser. Each tenant-scoped operation runs inside a
-transaction that downgrades to the least-privilege `clearview_app` role and sets the
+The API never queries as a superuser. It connects as the least-privilege **`clearview_login`**
+role (a member of `clearview_app`, non-superuser, non-BYPASSRLS — see S0-3), and each
+tenant-scoped operation runs inside a transaction that assumes `clearview_app` and sets the
 tenant for that transaction only:
 
 ```sql
@@ -142,13 +146,41 @@ UPDATE/DELETE.
 
 ---
 
+## S0-3 — session auth ✔ (dev-gated)
+
+Real login for both clients; **production never trusts a client-supplied tenant/staff**.
+
+- **Staff (WeChat):** `wx.login` → `POST /auth/staff/wx-login {code}` → server `code2session`
+  → `openid` → issues a session bound to `{tenantId, staffId}`. Requires `WX_APPID`/`WX_APPSECRET`
+  (**501** until configured — founder dependency, alongside ICP filing).
+- **Manager (Web):** login → session bound to `{tenantId, role, managerId}`.
+- **Dev-gated mock (non-production, 404 in prod):** `POST /auth/staff/dev-login` and
+  `POST /auth/manager/dev-login` provision + issue a session for local/CI synthetic data.
+- **Sessions** travel as `Authorization: Bearer`, the `cv_session` httpOnly cookie, or `?session=`
+  (SSE). `GET /auth/me`, `POST /auth/logout`.
+- **Guard:** session-first. In **production**, no valid session ⇒ **401**, and any `X-Tenant-Id` /
+  `staffHandle` from the client is **ignored**. In **non-production only**, a dev shim accepts
+  `X-Tenant-Id` (+ optional `X-Staff-Handle`) so the harness keeps working. `/reports` now records
+  the **session's** staff as author (body `staffHandle` ignored in prod).
+- **Ops hardening:** the app connects as **`clearview_login`** (non-superuser, non-BYPASSRLS,
+  member of `clearview_app`). Startup **refuses to boot** if the DB role can bypass RLS
+  (superuser / BYPASSRLS / table owner). `withTenant()` remains the only business-data channel;
+  the non-RLS auth tables (`sessions`, `staff_identities`, `manager_identities`) are read only by
+  the server on the base login role.
+
+Tests: guard unit (prod 401, self-report ignored, dev shim); `test:session` (dev-login → session →
+identity; **forged body `staffHandle` ignored**; cross-tenant isolation); `test:db-safety` (privileged
+DB connection refused, `clearview_login` accepted). **Founder dependencies (TODO):** `WX_APPID`/
+`WX_APPSECRET` + ICP for real wx-login; manager prod login (email magic-link/SSO); web session-UI wiring.
+
+---
+
 ## S1-1 — object API, events & realtime
 
 The `api` exposes the ontology object API the frontend and later tickets consume.
-**Multi-tenancy:** every request sends an `X-Tenant-Id` header (a UUID) — a **dev-only**
-stand-in until auth/session lands in **S0-3**. The guard is hard-disabled when
-`NODE_ENV=production`; S0-3 will derive the tenant from the authenticated session and
-reject any client-supplied id. The header only *names* the tenant; all queries run
+**Multi-tenancy:** identity comes from an authenticated **session** (S0-3). In production a valid
+session is required and any client-supplied `X-Tenant-Id` is ignored; the `X-Tenant-Id` header /
+`?tenantId=` query remain a **non-production dev shim** for the local harness. All queries run
 through `withTenant()`, so **RLS is the real isolation boundary**.
 
 | Method | Path | Purpose |
@@ -171,6 +203,7 @@ through `withTenant()`, so **RLS is the real isolation boundary**.
   Postgres `LISTEN/NOTIFY` when the api runs multi-instance).
 
 ```bash
+# dev shim (non-production): X-Tenant-Id names the tenant. Production uses a Bearer session.
 curl -X POST localhost:3001/objects -H 'content-type: application/json' \
   -H 'X-Tenant-Id: 11111111-1111-1111-1111-111111111111' \
   -d '{"type":"Task","properties":{"taskType":"room_turnover"},"expectedState":"ready"}'
@@ -185,7 +218,7 @@ cross-tenant isolation, archive) alongside the S0-2 RLS suite.
 
 The staff terminal is a **WeChat Mini Program** (not a third-party IM). It POSTs
 structured reports to **`POST /reports`**, which — via `withTenant()` — creates a
-`Communication` object, resolves/provisions the author `Staff`, records events, and links
+`Communication` object, records the **session staff** as author, records events, and links
 QR-scan evidence. **Idempotent** by `clientMessageId` (per tenant), so client retries
 never duplicate.
 
@@ -196,17 +229,18 @@ task_update / event / evidence / scan), `text`, structured `fields`, `attachment
 `scannedObjectId` gets a `references` link to the scanned object for cross-verification (S2).
 
 ```bash
+# dev: X-Tenant-Id + dev-shim handle. Production: Authorization: Bearer <session>; the author is the session staff.
 curl -X POST localhost:3001/reports -H 'content-type: application/json' \
-  -H 'X-Tenant-Id: 11111111-1111-1111-1111-111111111111' \
-  -d '{"clientMessageId":"m-1","reportType":"scan","staffHandle":"openid-a1",
+  -H 'X-Tenant-Id: 11111111-1111-1111-1111-111111111111' -H 'X-Staff-Handle: openid-a1' \
+  -d '{"clientMessageId":"m-1","reportType":"scan",
        "scans":[{"scannedObjectType":"Visit","scannedObjectId":"<id>","at":"2026-07-07T09:00:00Z"}]}'
 ```
 
-> **Auth is dev-only for now.** Tenant comes from the env-gated `X-Tenant-Id` header and
-> the staff identity from `staffHandle` in the body. **TODO(S0-3):** both must derive from
-> the `wx.login`/openid session and never be trusted from the client. The Mini Program is
-> its own front-end workstream (Mini Program account; prod API domain likely needs ICP
-> filing). Voice→text and QR-code resolution are separate follow-on tickets.
+> **Auth (S0-3, landed).** Tenant + staff identity come from the authenticated session; the report
+> author is the session's staff. In production the body's `staffHandle`/`staffDisplayName` and
+> `X-Tenant-Id` are **ignored**; the dev shim (non-production) keeps the harness working. The Mini
+> Program is its own front-end workstream (AppID + ICP). Voice→text and QR-code resolution are
+> separate follow-on tickets.
 
 ---
 
@@ -230,9 +264,9 @@ unexpired signature — no public bucket URLs, and one tenant can never fetch an
 
 Storage sits behind a `StoragePort` (put / getSignedUrl / head / read) — **dev** = local
 disk (`UPLOAD_DIR`, HMAC-signed URLs via `UPLOAD_URL_SECRET`); **prod** swaps in **Tencent
-COS** (China + WeChat) / MinIO / S3 with native presigned URLs, no logic change. Auth reuses
-the dev-only tenant guard (TODO S0-3 session). Out of scope (schema-compatible follow-ons):
-voice→text, QR-code resolution, AV scanning, presigned direct-to-COS upload.
+COS** (China + WeChat) / MinIO / S3 with native presigned URLs, no logic change. Tenant comes
+from the S0-3 session. Out of scope (schema-compatible follow-ons): voice→text, QR-code
+resolution, AV scanning, presigned direct-to-COS upload.
 
 Validated in-sandbox: upload → Snapshot/Document with sha256; tenant-prefixed keys; EXIF/GPS
 stripped; signed-URL round-trip; dedup; link + `evidence.attached` events; per-kind
@@ -278,22 +312,22 @@ scorer implementation (seam only), and manager action write-backs.
 Turns S2 verifications/Alerts into **ranked, evidence-backed manager cues**. Deterministic
 first (an LLM re-ranker is a clean seam); **human-in-the-loop** — S3 only proposes.
 
-- **Domain agents** (patient-flow, staff, inventory; equipment/financial/marketing next) are
+- **Domain agents** (all six: patient-flow, staff, inventory, financial, marketing, equipment) are
   deterministic detectors over the ontology. Each emits candidate `Recommendation`s from
   Alerts/verifications with `{ title, why, evidence[], confidence, proposedActions[], addresses }`.
 - **Conductor orchestrator** de-duplicates, **de-conflicts** cross-domain contention (annotating
   the trade-off — e.g. pulling a tech to pretest vs. leaving optical uncovered), **ranks** by
   severity × urgency × impact, caps the feed, and computes an **Operating Tempo** score.
 - **Recommendation** objects link `--addresses-->` the Alert and `--references-->` the subject;
-  `recommendation.created` is emitted and pushed via SSE.
+  `recommendation.created` is emitted and pushed via SSE. A tenant-wide `POST /recommendations/sweep`
+  runs all six agents.
 - **API:** `GET /recommendations?status=&limit=` (ranked feed) · `GET /recommendations/tempo` ·
   `POST /recommendations/:id/{approve|dismiss|snooze}` — records intent + emits an event, **no
   world write** in S3 (execution is S4).
 
-**Event seam** (closes the loop; absorbs the deferred S2 wire): an in-process `DomainEventBus`
-— `object.state.claimed → verifyObject`, and `verification.completed → agents → orchestrator →
-cue`. Handlers awaited in order (deterministic, testable); swap for Postgres `LISTEN/NOTIFY`
-when multi-instance.
+**Event seam** (closes the loop): an in-process `DomainEventBus` — `object.state.claimed →
+verifyObject`, and `verification.completed → agents → orchestrator → cue`. Handlers awaited in order
+(deterministic, testable); swap for Postgres `LISTEN/NOTIFY` when multi-instance.
 
 End-to-end (test): Room-3 conflict → the patient-flow agent's cue appears in the feed with the
 verification as evidence; approve moves it out of the open feed; cross-tenant isolated.
