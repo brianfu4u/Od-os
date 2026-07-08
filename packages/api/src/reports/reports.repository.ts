@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { PoolClient } from 'pg';
 import type { StaffReportInput, StaffReportResult } from '@clearview/shared';
 import { withTenant } from '../database/tenant-context';
+import type { SessionIdentity } from '../auth/session.types';
 
 interface IdRow {
   id: string;
@@ -9,13 +10,17 @@ interface IdRow {
 
 /**
  * Ingests a staff report as a Communication in a SINGLE tenant-scoped transaction:
- * idempotency check → find/provision Staff → insert Communication → events-on-change →
- * references links (author Staff + any resolved scan targets). All via withTenant() so
- * RLS is the isolation boundary and the whole report lands atomically.
+ * idempotency check → resolve author (FROM THE SESSION) → insert Communication → events-on-change
+ * → references links (author Staff + any resolved scan targets). All via withTenant() so RLS is
+ * the isolation boundary and the whole report lands atomically.
+ *
+ * S0-3: the author is resolved from the authenticated `identity`, NOT from `input.staffHandle`.
+ * In production the identity carries a session `staffId`; the request body's staff fields are
+ * ignored. The dev shim (non-production) supplies `identity.staffHandle` for the local harness.
  */
 @Injectable()
 export class ReportsRepository {
-  async ingest(tenantId: string, input: StaffReportInput): Promise<StaffReportResult> {
+  async ingest(tenantId: string, input: StaffReportInput, identity: SessionIdentity): Promise<StaffReportResult> {
     return withTenant(tenantId, async (c) => {
       // 1) Idempotency: same clientMessageId → return the existing Communication.
       const dupe = await this.findByClientMessageId(c, input.clientMessageId);
@@ -23,9 +28,8 @@ export class ReportsRepository {
         return { ...dupe, deduped: true };
       }
 
-      // 2) Resolve or provision the author Staff by handle (dev: staffHandle; prod: session).
-      const handle = input.staffHandle ?? 'unknown';
-      const staffId = await this.findOrProvisionStaff(c, tenantId, handle, input.staffDisplayName);
+      // 2) Author identity comes from the session (prod) or the dev shim (non-prod) — never the body.
+      const author = await this.resolveAuthor(c, tenantId, identity);
 
       // 3) Create the Communication object.
       const now = new Date().toISOString();
@@ -37,8 +41,8 @@ export class ReportsRepository {
         attachments: input.attachments ?? [],
         scans: input.scans ?? [],
         clientMessageId: input.clientMessageId,
-        authorStaffId: staffId,
-        author: { staffId, handle, displayName: input.staffDisplayName ?? handle },
+        authorStaffId: author.staffId,
+        author: { staffId: author.staffId, handle: author.handle, displayName: author.displayName },
         at: input.at ?? now,
         receivedAt: now,
       };
@@ -75,12 +79,12 @@ export class ReportsRepository {
             attachments: (input.attachments ?? []).length,
             scans: (input.scans ?? []).length,
           }),
-          handle,
+          author.staffId,
         ],
       );
 
       // 5) Author link: Communication —references→ Staff.
-      await this.link(c, tenantId, communicationId, staffId);
+      await this.link(c, tenantId, communicationId, author.staffId);
 
       // 6) Scan evidence: Communication —references→ each resolved, same-tenant scan target.
       for (const scan of input.scans ?? []) {
@@ -106,8 +110,34 @@ export class ReportsRepository {
         }
       }
 
-      return { communicationId, staffId, deduped: false };
+      return { communicationId, staffId: author.staffId, deduped: false };
     });
+  }
+
+  /**
+   * Resolve the author Staff from the authenticated identity.
+   *  - Session staff (prod): use identity.staffId directly; read its handle/displayName.
+   *  - Dev shim (non-prod): find-or-provision by identity.staffHandle. The request body is
+   *    NEVER consulted here (the guard already ignores it in production).
+   */
+  private async resolveAuthor(
+    c: PoolClient,
+    tenantId: string,
+    identity: SessionIdentity,
+  ): Promise<{ staffId: string; handle: string; displayName: string }> {
+    if (identity?.staffId) {
+      const res = await c.query<{ properties: Record<string, unknown> }>(
+        `SELECT properties FROM objects WHERE id = $1 AND type = 'Staff' LIMIT 1`,
+        [identity.staffId],
+      );
+      const p = res.rows[0]?.properties ?? {};
+      const handle = typeof p.staffHandle === 'string' ? p.staffHandle : identity.staffHandle ?? '';
+      const displayName = typeof p.displayName === 'string' ? p.displayName : identity.staffDisplayName ?? handle;
+      return { staffId: identity.staffId, handle, displayName };
+    }
+    const handle = identity?.staffHandle ?? 'unknown';
+    const staffId = await this.findOrProvisionStaff(c, tenantId, handle, identity?.staffDisplayName);
+    return { staffId, handle, displayName: identity?.staffDisplayName ?? handle };
   }
 
   private async findByClientMessageId(
