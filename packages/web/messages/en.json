@@ -1,24 +1,47 @@
 {
   "app": {
-    "title": "Clearview OD",
+    "title": "Clearview Eye · Command Center",
     "subtitle": "Real-time operating system for optometry clinics",
-    "badge": "Sprint 0 · Skeleton"
+    "badge": "Live · Synthetic Demo",
+    "navConsole": "Staff Console"
+  },
+  "feed": {
+    "live": "Live",
+    "connecting": "Connecting…",
+    "offline": "Offline"
   },
   "loop": {
-    "label": "Agentic loop",
+    "label": "Agentic Loop",
+    "gate": "approve",
     "stages": {
       "sense": "Sense",
-      "map": "Map",
-      "verify": "Cross-verify",
+      "map": "Map to Ontology",
+      "verify": "Cross-Verify",
       "reason": "Reason",
       "recommend": "Recommend",
       "act": "Act",
       "learn": "Learn"
     }
   },
+  "podium": {
+    "tempo": "Operating Tempo",
+    "tempoGood": "Good rhythm",
+    "tempoWatch": "Watch",
+    "tempoAct": "Act now",
+    "branch": "branch",
+    "commander": "Commander",
+    "kpi": {
+      "activeTasks": "Active tasks",
+      "onTime": "On-time",
+      "conflicts": "Open conflicts",
+      "openCues": "Open cues"
+    }
+  },
   "cc": {
-    "heading": "Commander Command Center",
-    "tagline": "Six domains · evidence-backed advice · human-in-the-loop"
+    "domainsHeading": "360° Operating State",
+    "domainsTagline": "Six domains · live object counts",
+    "offline": "Cannot reach the backend API ({base}). Start it first: pnpm --filter @clearview/api dev, with migrations and seed applied.",
+    "retry": "Retry"
   },
   "domains": {
     "staff": "Staff",
@@ -27,11 +50,97 @@
     "marketing": "Marketing",
     "equipment": "Equipment",
     "inventory": "Inventory",
-    "pending": "Awaiting live data"
+    "status": {
+      "steady": "Steady",
+      "watch": "Watch",
+      "action": "Action"
+    },
+    "metrics": {
+      "onDuty": "On duty",
+      "cues": "Cues",
+      "activeTasks": "Active tasks",
+      "overdue": "Overdue",
+      "invoices": "Open invoices",
+      "leads": "Leads",
+      "campaigns": "Campaigns",
+      "equipment": "Units",
+      "lowStock": "Low-stock items",
+      "items": "SKUs"
+    },
+    "notes": {
+      "staff": "Staffing balanced, nominal",
+      "patients": "Patient flow steady",
+      "financial": "Billing nominal",
+      "marketing": "Acquisition steady",
+      "equipment": "Equipment nominal",
+      "inventory": "Stock sufficient"
+    },
+    "noteAction": "{n} cue(s) awaiting review",
+    "noteWatch": "Attention: unresolved items"
   },
   "cues": {
-    "title": "Conductor cues",
-    "empty": "No cues yet — the skeleton is ready, waiting for live data and cross-verification."
+    "title": "AI Co-Pilot · Cues",
+    "subtitle": "Evidence-backed · human-in-the-loop approval",
+    "empty": "No open cues — file a report or upload evidence from the staff console to drive the loop.",
+    "why": "Why",
+    "confidence": "Confidence",
+    "source": "Source agent",
+    "approve": "Approve",
+    "dismiss": "Dismiss",
+    "snooze": "Snooze",
+    "tradeoff": "Trade-off",
+    "proposed": "Proposed",
+    "priority": {
+      "high": "High priority",
+      "med": "Medium",
+      "low": "Low"
+    }
+  },
+  "agents": {
+    "patient_flow": "Patient flow",
+    "staff": "Staff",
+    "inventory": "Inventory",
+    "equipment": "Equipment",
+    "financial": "Financial",
+    "marketing": "Marketing"
+  },
+  "ledger": {
+    "title": "Cross-Verification Ledger",
+    "subtitle": "Claim → evidence → verdict",
+    "empty": "No verification records yet.",
+    "states": {
+      "verified": "Verified",
+      "pending": "Pending",
+      "conflict": "Conflict",
+      "unverified": "Unverified"
+    },
+    "evidenceKinds": {
+      "qr_scan": "QR",
+      "snapshot": "Snapshot",
+      "document": "Document",
+      "communication": "Comm",
+      "timing": "Timing",
+      "cross_object": "Cross-object"
+    }
+  },
+  "comms": {
+    "title": "Live Comms",
+    "subtitle": "Staff reports · fed into cross-verification",
+    "listening": "LLM listening",
+    "empty": "No comms yet.",
+    "reportTypes": {
+      "clock_in": "Clock in",
+      "clock_out": "Clock out",
+      "task_update": "Task update",
+      "event": "Event",
+      "evidence": "Evidence",
+      "scan": "Scan"
+    },
+    "annScan": "Scan captured as first-class verification evidence",
+    "annEvidence": "Attachment linked as evidence",
+    "annTask": "Task state updated; re-verification triggered",
+    "annClock": "Attendance recorded",
+    "annDefault": "Folded into cross-verification"
   },
   "storage": {
     "label": "Local preference (localStorage fallback demo)",
@@ -43,6 +152,44 @@
   },
   "footer": {
     "synthetic": "Synthetic, privacy-safe data only — no real patient information (PHI).",
-    "sprint": "Clearview OD · Sprint 0 deployable skeleton"
+    "sprint": "Clearview OD · Command Center (live · demo)"
+  },
+  "console": {
+    "title": "Staff Console (WeChat Mini Program stand-in)",
+    "subtitle": "Posts reports / uploads / scans with the exact payloads the Mini Program will, to drive the live loop.",
+    "back": "← Back to command center",
+    "subject": "Subject object",
+    "noObjects": "No selectable objects (run the seed first)",
+    "reverify": "Re-verify selected object",
+    "refresh": "Refresh",
+    "reportCard": "Report an event",
+    "reportHint": "Creates a Communication; when checked, attaches a scan of the subject to trigger cross-verification.",
+    "reportType": "Report type",
+    "message": "Message",
+    "staffName": "Staff name (dev only)",
+    "scanSubject": "Attach a scan of the subject (as evidence)",
+    "sendReport": "Send report",
+    "uploadCard": "Upload evidence",
+    "uploadHint": "Upload a photo / document, optionally linked to the subject to trigger re-verification.",
+    "file": "File",
+    "kind": "Kind",
+    "kinds": {
+      "photo": "Photo",
+      "screenshot": "Screenshot",
+      "document": "Document",
+      "pdf": "PDF"
+    },
+    "linkUpload": "Link to selected object",
+    "sendUpload": "Upload",
+    "activity": "Activity log",
+    "activityEmpty": "No actions yet.",
+    "report": "Report",
+    "upload": "Upload",
+    "verify": "Verify",
+    "created": "created",
+    "deduped": "deduped",
+    "noFile": "Choose a file first.",
+    "loadFailed": "Failed to load objects",
+    "devNote": "Dev: tenant travels via X-Tenant-Id; production uses a wx.login/openid session (S0-3) and never trusts a client-supplied identity."
   }
 }
