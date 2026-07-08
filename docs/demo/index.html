@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clearview OD · 指挥官命令中心(演示)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0f17;--panel:#131a26;--panel2:#0f1622;--line:#243040;--ink:#eef2f8;--mut:#93a0b4;--dim:#59657a;
+    --green:#33c98a;--amber:#f2b53a;--red:#f2624f;--cyan:#4ac6ff;--violet:#a78bfa;--gold:#e0b354;
+  }
+  *{margin:0;box-sizing:border-box}
+  body{font-family:'Noto Sans SC','Noto Sans JP','Inter',sans-serif;background:
+    radial-gradient(1200px 600px at 85% -10%,rgba(74,155,255,.08),transparent 60%),
+    radial-gradient(900px 500px at 10% 110%,rgba(224,179,84,.06),transparent 60%),var(--bg);
+    color:var(--ink);-webkit-font-smoothing:antialiased;min-height:100vh}
+  .mono{font-family:'IBM Plex Mono',monospace}
+  .wrap{max-width:1180px;margin:0 auto;padding:18px 20px 60px}
+
+  /* top bar */
+  .top{display:flex;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:18px}
+  .brand{display:flex;align-items:center;gap:11px}
+  .baton{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--gold),#b98b2e);display:flex;align-items:center;justify-content:center;font-size:17px}
+  .brand h1{font-size:16.5px;font-weight:900;letter-spacing:.2px}
+  .brand .s{font-size:11.5px;color:var(--mut);margin-top:1px}
+  .spacer{flex:1}
+  .clock{font-size:13px;color:var(--cyan)}
+  .loop{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--mut);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:5px 11px}
+  .loop b{color:var(--gold);font-weight:600}
+  .lang{display:flex;border:1px solid var(--line);border-radius:20px;overflow:hidden}
+  .lang button{background:transparent;border:0;color:var(--mut);padding:6px 12px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  .lang button.on{background:var(--gold);color:#1a1205;font-weight:700}
+
+  /* kpi */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px 15px}
+  .kpi .l{font-size:11.5px;color:var(--mut)}
+  .kpi .v{font-size:26px;font-weight:800;margin-top:5px;font-family:'Inter'}
+  .kpi .d{font-size:11px;color:var(--dim);margin-top:2px}
+
+  .sect{font-size:12px;font-weight:700;color:var(--mut);letter-spacing:1.4px;text-transform:uppercase;margin:22px 2px 12px}
+
+  /* six domains */
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .tile{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;position:relative;overflow:hidden}
+  .tile:before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px}
+  .tile.high:before{background:var(--red)}.tile.med:before{background:var(--amber)}.tile.ok:before{background:var(--green)}
+  .tile .h{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+  .tile .ico{font-size:16px}
+  .tile .dm{font-size:13.5px;font-weight:700}
+  .tile .sev{margin-left:auto;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
+  .sev.high{background:rgba(242,98,79,.16);color:var(--red)}
+  .sev.med{background:rgba(242,181,58,.16);color:var(--amber)}
+  .sev.ok{background:rgba(51,201,138,.16);color:var(--green)}
+  .tile .cue{font-size:13px;font-weight:600;line-height:1.45;margin-bottom:6px}
+  .tile .why{font-size:11.5px;color:var(--mut);line-height:1.5;margin-bottom:9px}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:9px}
+  .chip{font-size:10.5px;color:var(--cyan);background:rgba(74,198,255,.1);border:1px solid rgba(74,198,255,.22);border-radius:6px;padding:2px 7px}
+  .tile .foot{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim)}
+  .conf{display:flex;align-items:center;gap:6px}
+  .bar{width:64px;height:5px;background:#0c121c;border-radius:4px;overflow:hidden;border:1px solid var(--line)}
+  .bar i{display:block;height:100%}
+  .act{margin-left:auto;font-size:11px;color:var(--gold);border:1px solid rgba(224,179,84,.35);border-radius:7px;padding:3px 9px;cursor:pointer;background:rgba(224,179,84,.06)}
+
+  /* hero verification */
+  .hero{display:grid;grid-template-columns:1.15fr .85fr;gap:14px}
+  @media(max-width:860px){.hero{grid-template-columns:1fr}.grid{grid-template-columns:1fr 1fr}.kpis{grid-template-columns:1fr 1fr}}
+  @media(max-width:560px){.grid,.kpis{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .card h3{font-size:14px;font-weight:800;margin-bottom:3px}
+  .card .cs{font-size:11.5px;color:var(--mut);margin-bottom:13px}
+  .tl{position:relative;padding-left:20px}
+  .tl:before{content:'';position:absolute;left:5px;top:4px;bottom:4px;width:2px;background:var(--line)}
+  .step{position:relative;margin-bottom:14px}
+  .step:last-child{margin-bottom:0}
+  .step .dot{position:absolute;left:-18px;top:3px;width:11px;height:11px;border-radius:50%;border:2px solid var(--bg)}
+  .step .st{font-size:12.5px;font-weight:700;margin-bottom:2px}
+  .step .tx{font-size:11.5px;color:var(--mut);line-height:1.5}
+  .verdict{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;margin-top:5px}
+  .v-con{background:rgba(242,98,79,.16);color:var(--red)}
+  .v-ver{background:rgba(51,201,138,.16);color:var(--green)}
+
+  .ledger{margin-top:4px}
+  .lrow{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:12px}
+  .lrow:last-child{border-bottom:0}
+  .lrow .badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;white-space:nowrap}
+  .lrow .rs{color:var(--mut);font-size:11px;line-height:1.45}
+  .lrow .cf{margin-left:auto;font-weight:700}
+
+  /* comms */
+  .comm{display:flex;gap:9px;padding:9px 0;border-bottom:1px dashed var(--line)}
+  .comm:last-child{border-bottom:0}
+  .comm .av{width:26px;height:26px;border-radius:50%;background:var(--panel2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--cyan);flex-shrink:0}
+  .comm .who{font-size:12px;font-weight:600}
+  .comm .tm{font-size:10.5px;color:var(--dim)}
+  .comm .msg{font-size:12px;color:var(--mut);margin-top:2px;line-height:1.45}
+  .banner{background:linear-gradient(180deg,rgba(224,179,84,.08),transparent);border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:10px;padding:11px 14px;font-size:12px;color:var(--mut);line-height:1.6;margin-top:20px}
+  .foot{color:var(--dim);font-size:11px;margin-top:16px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand">
+      <div class="baton">🎼</div>
+      <div><h1 data-i="title">指挥官命令中心</h1><div class="s" data-i="sub">Clearview OD · 眼科诊所实时运营系统 · 演示(合成数据)</div></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="clock mono" id="clock">--:--:--</div>
+    <div class="loop"><span data-i="loop">循环</span> · <b id="loopStage">感知</b></div>
+    <div class="lang">
+      <button data-l="zh" class="on" onclick="setLang('zh')">中</button>
+      <button data-l="en" onclick="setLang('en')">EN</button>
+      <button data-l="ja" onclick="setLang('ja')">日</button>
+    </div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="sect" data-i="secDomains">六大域 · 实时态势</div>
+  <div class="grid" id="grid"></div>
+
+  <div class="sect" data-i="secHero">交叉验证 · 招牌闭环(护城河)</div>
+  <div class="hero">
+    <div class="card">
+      <h3 data-i="hTitle">Room 3 周转 · 声称 vs 证据</h3>
+      <div class="cs" data-i="hSub">系统不轻信单一来源;把「声称」与独立「证据」相互印证。</div>
+      <div class="tl" id="timeline"></div>
+    </div>
+    <div class="card">
+      <h3 data-i="lTitle">验证账本(不可篡改)</h3>
+      <div class="cs" data-i="lSub">每次验证追加一行,真相随证据累积。</div>
+      <div class="ledger" id="ledger"></div>
+      <div style="margin-top:16px">
+        <h3 data-i="cTitle" style="margin-bottom:8px">实时沟通流</h3>
+        <div id="comms"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="banner" id="banner"></div>
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+/* ---------- safe storage (sandboxed iframes throw on localStorage) ---------- */
+var mem={};
+var safeStore={
+  get:function(k){try{return window.localStorage.getItem(k)}catch(e){return (k in mem)?mem[k]:null}},
+  set:function(k,v){try{window.localStorage.setItem(k,v)}catch(e){mem[k]=v}}
+};
+
+/* ---------- i18n dictionary ---------- */
+var DICT={
+  zh:{
+    title:'指挥官命令中心',sub:'Clearview OD · 眼科诊所实时运营系统 · 演示(合成数据)',
+    loop:'循环',secDomains:'六大域 · 实时态势',secHero:'交叉验证 · 招牌闭环(护城河)',
+    hTitle:'Room 3 周转 · 声称 vs 证据',hSub:'系统不轻信单一来源;把「声称」与独立「证据」相互印证。',
+    lTitle:'验证账本(不可篡改)',lSub:'每次验证追加一行,真相随证据累积。',
+    cTitle:'实时沟通流',
+    kpiTempo:'运营节奏',kpiTempoD:'紧张 · 需指挥介入',kpiCues:'待处理建议',kpiCuesD:'六大域共计',
+    kpiVer:'今日已验证',kpiVerD:'含 1 例冲突已澄清',kpiConf:'平均置信度',kpiConfD:'跨已验证任务',
+    act:'查看',sevHigh:'高',sevMed:'中',sevOk:'正常',conf:'置信度',
+    stages:['感知','映射','验证','推理','建议'],
+    loopReasons:'',
+    banner:'<b style="color:var(--gold)">这是什么:</b>经理是乐团指挥;系统听员工与经理的沟通 + 上传的照片/文档(不是传感器),用 LLM 交叉验证任务是否真的完成,再在六大域给出带证据、带置信度的建议。人在环——AI 只提议,经理拍板。',
+    foot:'演示数据来自代码仓库 packages/api/db/seed.ts 的合成数据(无真实病人信息)· 验证数值复现自结构设计文档 §4 · Clearview OD',
+    verdictConflict:'冲突 @ 0.50',verdictVerified:'已验证 @ 0.855',
+    domains:[
+      {ico:'🧭',dm:'患者流',sev:'high',cue:'Room 3 周转存在冲突',why:'前台声称「已备好」,但缺少必需的整理快照,且上一位患者 6 分钟内刚离开(用时异常)。',chips:['沟通:已备好','缺:快照','用时异常'],conf:0.50,act:'查看验证'},
+      {ico:'👥',dm:'员工',sev:'med',cue:'Bay 2 预检逾期未完成',why:'已过应完成时间仍待验证,必需文档缺失。建议改派给 A · Tech 顶上。',chips:['逾期','缺:文档','建议改派'],conf:0.50,act:'改派'},
+      {ico:'📦',dm:'库存',sev:'med',cue:'隐形眼镜护理液即将断货',why:'CLS-500 现存 3,低于补货点 5。建议今天下单补货,避免影响验配。',chips:['现存 3 < 补货点 5'],conf:0.90,act:'生成补货单'},
+      {ico:'💰',dm:'财务',sev:'high',cue:'已收款未入账 + 理赔缺件',why:'INV-3007 copay ¥8,240 已收但未入账;理赔 CLM-2041(VisionCare)缺转诊单,提交将被拒。',chips:['未入账 ¥8,240','CLM-2041 缺转诊单'],conf:0.88,act:'去处理'},
+      {ico:'📣',dm:'营销',sev:'med',cue:'差评超时未回 + 线索未跟进',why:'2★ 差评(REV-51)已超 60 分钟响应时限;Web 线索 LEAD-88 超 24 小时未跟进。',chips:['2★ 超 60min','线索 >24h'],conf:0.80,act:'去回复'},
+      {ico:'🔬',dm:'设备',sev:'high',cue:'OCT #2 校准逾期仍在使用',why:'OCT #2 已超 30 天校准窗口 31 天,且 10:15 被扫码用于检查。建议立即停用并校准。',chips:['逾期 31 天','扫码使用中'],conf:0.85,act:'停用并校准'}
+    ],
+    timeline:[
+      {c:'var(--mut)',st:'09:20 · 声称完成',tx:'前台 A 在企业微信报告:「3号房已为下一位患者备好」。任务 claimed=ready。'},
+      {c:'var(--red)',st:'交叉验证 → 冲突',tx:'必需的整理快照缺失,且上一位患者 <6 分钟前刚离开(用时异常)。触发冲突。',v:'con'},
+      {c:'var(--cyan)',st:'技师上传整理快照',tx:'A · Tech 上传「Room 3 tidied」照片,补齐必需证据。事件驱动自动重新评分。'},
+      {c:'var(--green)',st:'重新验证 → 已验证',tx:'快照符合 SOP,冲突澄清。任务 verified,置信度升至 0.855。',v:'ver'}
+    ],
+    ledger:[
+      {b:'冲突',bc:'var(--red)',bg:'rgba(242,98,79,.16)',rs:'缺必需快照;上一患者 <6min 前离开(用时异常)。',cf:'0.50'},
+      {b:'已验证',bc:'var(--green)',bg:'rgba(51,201,138,.16)',rs:'快照已上传且符合 SOP;重新评分为已验证。',cf:'0.855'}
+    ],
+    comms:[
+      {ini:'FD',who:'A · 前台',tm:'09:20',msg:'3号房已为下一位患者备好'},
+      {ini:'TC',who:'A · 技师',tm:'10:15',msg:'OCT #2 用于 10:15 检查(已扫码)'}
+    ]
+  },
+  en:{
+    title:'Conductor Command Center',sub:'Clearview OD · real-time operating system for eye clinics · Demo (synthetic data)',
+    loop:'Loop',secDomains:'Six Domains · Live Situation',secHero:'Cross-Verification · The Signature Loop (the moat)',
+    hTitle:'Room 3 Turnover · Claim vs Evidence',hSub:'The system never trusts a single source; it reconciles the claim against independent evidence.',
+    lTitle:'Verification Ledger (immutable)',lSub:'Each verification appends a row; truth accrues with evidence.',
+    cTitle:'Live Communication Stream',
+    kpiTempo:'Operating Tempo',kpiTempoD:'Tense · needs the conductor',kpiCues:'Open Cues',kpiCuesD:'across six domains',
+    kpiVer:'Verified Today',kpiVerD:'incl. 1 conflict cleared',kpiConf:'Avg Confidence',kpiConfD:'across verified tasks',
+    act:'View',sevHigh:'HIGH',sevMed:'MED',sevOk:'OK',conf:'confidence',
+    stages:['Sense','Map','Verify','Reason','Recommend'],
+    banner:'<b style="color:var(--gold)">What this is:</b> the manager is the orchestra conductor; the system listens to staff↔manager communication + uploaded photos/documents (not sensors), uses an LLM to cross-verify whether tasks are truly done, then advises across six domains with evidence and confidence. Human-in-the-loop — the AI proposes, the manager decides.',
+    foot:'Demo data is the synthetic seed in repo packages/api/db/seed.ts (no real patient data) · verification numbers reproduce structure-design §4 · Clearview OD',
+    verdictConflict:'CONFLICT @ 0.50',verdictVerified:'VERIFIED @ 0.855',
+    domains:[
+      {ico:'🧭',dm:'Patient Flow',sev:'high',cue:'Room 3 turnover is in conflict',why:'Front desk claims "ready", but the required tidy-up snapshot is missing and the prior patient left <6 min ago (timing anomaly).',chips:['comm: ready','missing: snapshot','timing anomaly'],conf:0.50,act:'View verification'},
+      {ico:'👥',dm:'Staff',sev:'med',cue:'Bay 2 pretest overdue',why:'Past its due time and still unverified; required document missing. Suggest reassigning to A · Tech.',chips:['overdue','missing: document','reassign'],conf:0.50,act:'Reassign'},
+      {ico:'📦',dm:'Inventory',sev:'med',cue:'Contact-lens solution running low',why:'CLS-500 on-hand 3, below reorder point 5. Suggest placing a reorder today to avoid disrupting fittings.',chips:['on-hand 3 < reorder 5'],conf:0.90,act:'Draft reorder'},
+      {ico:'💰',dm:'Financial',sev:'high',cue:'Collected-but-unposted + claim missing item',why:'INV-3007 copay $8,240 collected but not posted; claim CLM-2041 (VisionCare) is missing its referral and will be denied.',chips:['unposted $8,240','CLM-2041 no referral'],conf:0.88,act:'Resolve'},
+      {ico:'📣',dm:'Marketing',sev:'med',cue:'Review SLA breach + unworked lead',why:'A 2★ review (REV-51) is past the 60-min response SLA; web lead LEAD-88 has gone >24h without follow-up.',chips:['2★ >60min','lead >24h'],conf:0.80,act:'Respond'},
+      {ico:'🔬',dm:'Equipment',sev:'high',cue:'OCT #2 used while calibration overdue',why:'OCT #2 is 31 days past its 30-day calibration window and was scanned in use at 10:15. Suggest taking it offline and recalibrating.',chips:['31 days overdue','scanned in use'],conf:0.85,act:'Offline + calibrate'}
+    ],
+    timeline:[
+      {c:'var(--mut)',st:'09:20 · Claim of completion',tx:'Front desk A reports on WeCom: "Room 3 is ready for the next patient." Task claimed=ready.'},
+      {c:'var(--red)',st:'Cross-verify → conflict',tx:'The required tidy-up snapshot is missing, and the prior patient left <6 min ago (timing anomaly). Conflict is triggered.',v:'con'},
+      {c:'var(--cyan)',st:'Tech uploads the snapshot',tx:'A · Tech uploads the "Room 3 tidied" photo, satisfying the required evidence. Event-driven auto re-score.'},
+      {c:'var(--green)',st:'Re-verify → verified',tx:'The snapshot matches SOP; the conflict clears. Task verified, confidence rises to 0.855.',v:'ver'}
+    ],
+    ledger:[
+      {b:'CONFLICT',bc:'var(--red)',bg:'rgba(242,98,79,.16)',rs:'Required snapshot missing; prior patient left <6 min ago (timing anomaly).',cf:'0.50'},
+      {b:'VERIFIED',bc:'var(--green)',bg:'rgba(51,201,138,.16)',rs:'Snapshot uploaded and matches SOP; re-scored to verified.',cf:'0.855'}
+    ],
+    comms:[
+      {ini:'FD',who:'A · Front Desk',tm:'09:20',msg:'Room 3 is ready for the next patient.'},
+      {ini:'TC',who:'A · Tech',tm:'10:15',msg:'OCT #2 in use for the 10:15 exam (scanned).'}
+    ]
+  },
+  ja:{
+    title:'指揮官コマンドセンター',sub:'Clearview OD · 眼科クリニック向けリアルタイム運営システム · デモ(合成データ)',
+    loop:'ループ',secDomains:'6領域 · リアルタイム状況',secHero:'クロス検証 · 看板ループ(堀)',
+    hTitle:'Room 3 の引き継ぎ · 主張 vs 証拠',hSub:'単一の情報源を鵜呑みにせず、主張を独立した証拠と突き合わせます。',
+    lTitle:'検証台帳(改ざん不可)',lSub:'検証ごとに1行を追記し、真実が証拠とともに蓄積します。',
+    cTitle:'リアルタイム連絡ストリーム',
+    kpiTempo:'運営テンポ',kpiTempoD:'逼迫 · 指揮者の介入が必要',kpiCues:'未処理の提案',kpiCuesD:'6領域の合計',
+    kpiVer:'本日検証済み',kpiVerD:'競合1件を解消済み',kpiConf:'平均信頼度',kpiConfD:'検証済みタスク全体',
+    act:'表示',sevHigh:'高',sevMed:'中',sevOk:'正常',conf:'信頼度',
+    stages:['感知','マッピング','検証','推論','提案'],
+    banner:'<b style="color:var(--gold)">これは何か:</b> マネージャーはオーケストラの指揮者。システムはスタッフと管理者の連絡＋アップロードされた写真/文書(センサーではない)を聞き取り、LLM でタスクが本当に完了したかをクロス検証し、6領域で証拠と信頼度つきの提案を行います。ヒューマン・イン・ザ・ループ——AI は提案し、マネージャーが決定します。',
+    foot:'デモデータはリポジトリ packages/api/db/seed.ts の合成データ(実際の患者情報なし)· 検証数値は構造設計書 §4 を再現 · Clearview OD',
+    verdictConflict:'競合 @ 0.50',verdictVerified:'検証済み @ 0.855',
+    domains:[
+      {ico:'🧭',dm:'患者フロー',sev:'high',cue:'Room 3 の引き継ぎに競合',why:'受付は「準備完了」と主張していますが、必須の整頓スナップショットが欠落し、前の患者が6分以内に退出しています(所要時間の異常)。',chips:['連絡:準備完了','欠落:スナップ','所要時間異常'],conf:0.50,act:'検証を表示'},
+      {ico:'👥',dm:'スタッフ',sev:'med',cue:'Bay 2 の事前検査が期限超過',why:'期限を過ぎても未検証で、必須文書が欠落。A · Tech への再割当てを提案します。',chips:['期限超過','欠落:文書','再割当て'],conf:0.50,act:'再割当て'},
+      {ico:'📦',dm:'在庫',sev:'med',cue:'コンタクト用ソリューションが残りわずか',why:'CLS-500 の在庫は3で、発注点5を下回っています。フィッティングに支障が出る前に本日発注を提案します。',chips:['在庫 3 < 発注点 5'],conf:0.90,act:'発注書を作成'},
+      {ico:'💰',dm:'財務',sev:'high',cue:'入金済み未記帳 + 請求に不備',why:'INV-3007 の自己負担 ¥8,240 は入金済みだが未記帳。請求 CLM-2041(VisionCare)は紹介状が欠落しており却下されます。',chips:['未記帳 ¥8,240','CLM-2041 紹介状なし'],conf:0.88,act:'処理する'},
+      {ico:'📣',dm:'マーケティング',sev:'med',cue:'低評価の返信遅延 + 未対応リード',why:'2★ のレビュー(REV-51)は60分の応答期限を超過。Web リード LEAD-88 は24時間以上フォローされていません。',chips:['2★ 60分超過','リード 24h超'],conf:0.80,act:'返信する'},
+      {ico:'🔬',dm:'機器',sev:'high',cue:'OCT #2 が校正期限切れのまま使用中',why:'OCT #2 は30日の校正期限を31日超過し、10:15 にスキャンで使用されました。オフラインにして再校正することを提案します。',chips:['31日超過','スキャンで使用中'],conf:0.85,act:'オフライン+校正'}
+    ],
+    timeline:[
+      {c:'var(--mut)',st:'09:20 · 完了の主張',tx:'受付 A が WeCom で報告:「Room 3 は次の患者の準備ができました」。タスク claimed=ready。'},
+      {c:'var(--red)',st:'クロス検証 → 競合',tx:'必須の整頓スナップショットが欠落し、前の患者が6分以内に退出(所要時間の異常)。競合がトリガーされます。',v:'con'},
+      {c:'var(--cyan)',st:'技師がスナップショットをアップロード',tx:'A · Tech が「Room 3 tidied」の写真をアップロードし、必須の証拠を満たします。イベント駆動で自動再採点。'},
+      {c:'var(--green)',st:'再検証 → 検証済み',tx:'スナップショットが SOP に合致し、競合が解消。タスクは検証済みとなり、信頼度は 0.855 に上昇。',v:'ver'}
+    ],
+    ledger:[
+      {b:'競合',bc:'var(--red)',bg:'rgba(242,98,79,.16)',rs:'必須スナップショットが欠落;前の患者が6分以内に退出(所要時間の異常)。',cf:'0.50'},
+      {b:'検証済み',bc:'var(--green)',bg:'rgba(51,201,138,.16)',rs:'スナップショットがアップロードされ SOP に合致;検証済みに再採点。',cf:'0.855'}
+    ],
+    comms:[
+      {ini:'FD',who:'A · 受付',tm:'09:20',msg:'Room 3 は次の患者の準備ができました。'},
+      {ini:'TC',who:'A · 技師',tm:'10:15',msg:'OCT #2 を 10:15 の検査に使用(スキャン済み)。'}
+    ]
+  }
+};
+
+var lang=safeStore.get('od_lang')||'zh';
+if(!DICT[lang])lang='zh';
+
+function confColor(c){return c>=0.8?'var(--green)':(c>=0.6?'var(--amber)':'var(--red)');}
+
+function render(){
+  var d=DICT[lang];
+  document.documentElement.lang=lang;
+  // static text
+  document.querySelectorAll('[data-i]').forEach(function(el){var k=el.getAttribute('data-i');if(d[k]!=null)el.innerHTML=d[k];});
+  // lang buttons
+  document.querySelectorAll('.lang button').forEach(function(b){b.classList.toggle('on',b.getAttribute('data-l')===lang);});
+  // kpis
+  var kpis=[
+    {l:d.kpiTempo,v:'72<span style="font-size:14px;color:var(--dim)">/100</span>',d:d.kpiTempoD,c:'var(--amber)'},
+    {l:d.kpiCues,v:'6',d:d.kpiCuesD,c:'var(--ink)'},
+    {l:d.kpiVer,v:'1',d:d.kpiVerD,c:'var(--green)'},
+    {l:d.kpiConf,v:'0.72',d:d.kpiConfD,c:'var(--cyan)'}
+  ];
+  document.getElementById('kpis').innerHTML=kpis.map(function(k){
+    return '<div class="kpi"><div class="l">'+k.l+'</div><div class="v" style="color:'+k.c+'">'+k.v+'</div><div class="d">'+k.d+'</div></div>';
+  }).join('');
+  // domains
+  document.getElementById('grid').innerHTML=d.domains.map(function(x){
+    var sevtxt=x.sev==='high'?d.sevHigh:(x.sev==='med'?d.sevMed:d.sevOk);
+    var chips=x.chips.map(function(c){return '<span class="chip">'+c+'</span>';}).join('');
+    var pct=Math.round(x.conf*100);
+    return '<div class="tile '+x.sev+'">'+
+      '<div class="h"><span class="ico">'+x.ico+'</span><span class="dm">'+x.dm+'</span><span class="sev '+x.sev+'">'+sevtxt+'</span></div>'+
+      '<div class="cue">'+x.cue+'</div><div class="why">'+x.why+'</div>'+
+      '<div class="chips">'+chips+'</div>'+
+      '<div class="foot"><span class="conf">'+d.conf+' <span class="bar"><i style="width:'+pct+'%;background:'+confColor(x.conf)+'"></i></span> <b class="mono" style="color:'+confColor(x.conf)+'">'+x.conf.toFixed(2)+'</b></span>'+
+      '<span class="act">'+x.act+' →</span></div></div>';
+  }).join('');
+  // timeline
+  document.getElementById('timeline').innerHTML=d.timeline.map(function(s){
+    var v=s.v?('<div class="verdict '+(s.v==='con'?'v-con':'v-ver')+'">'+(s.v==='con'?d.verdictConflict:d.verdictVerified)+'</div>'):'';
+    return '<div class="step"><span class="dot" style="background:'+s.c+'"></span><div class="st">'+s.st+'</div><div class="tx">'+s.tx+'</div>'+v+'</div>';
+  }).join('');
+  // ledger
+  document.getElementById('ledger').innerHTML=d.ledger.map(function(r){
+    return '<div class="lrow"><span class="badge" style="color:'+r.bc+';background:'+r.bg+'">'+r.b+'</span><span class="rs">'+r.rs+'</span><span class="cf mono" style="color:'+r.bc+'">'+r.cf+'</span></div>';
+  }).join('');
+  // comms
+  document.getElementById('comms').innerHTML=d.comms.map(function(c){
+    return '<div class="comm"><div class="av">'+c.ini+'</div><div><span class="who">'+c.who+'</span> <span class="tm mono">'+c.tm+'</span><div class="msg">'+c.msg+'</div></div></div>';
+  }).join('');
+}
+
+function setLang(l){lang=DICT[l]?l:'zh';safeStore.set('od_lang',lang);render();}
+
+/* live clock + loop stage */
+function tick(){
+  var d=DICT[lang];var now=new Date();
+  function p(n){return (n<10?'0':'')+n;}
+  var el=document.getElementById('clock');
+  if(el)el.textContent=p(now.getHours())+':'+p(now.getMinutes())+':'+p(now.getSeconds());
+  var stages=d.stages||['sense'];
+  var idx=Math.floor(now.getSeconds()/2)%stages.length;
+  var ls=document.getElementById('loopStage');
+  if(ls)ls.textContent=stages[idx];
+}
+
+try{ render(); tick(); setInterval(tick,1000); }
+catch(e){ /* never leave the page blank */
+  var w=document.querySelector('.wrap');
+  if(w&&!document.getElementById('grid').innerHTML){ /* minimal fallback handled by render */ }
+}
+</script>
+</body>
+</html>
