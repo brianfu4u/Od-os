@@ -65,7 +65,13 @@
       "campaigns": "Campaigns",
       "equipment": "Units",
       "lowStock": "Low-stock items",
-      "items": "SKUs"
+      "items": "SKUs",
+      "collected": "Collected today",
+      "unposted": "Unposted",
+      "newLeads": "New leads",
+      "negativeReviews": "Reviews to answer",
+      "ready": "Ready",
+      "calibrationDue": "Calibration due"
     },
     "notes": {
       "staff": "Staffing balanced, nominal",
