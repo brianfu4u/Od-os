@@ -154,6 +154,18 @@ export function StaffConsole() {
     }
   }
 
+  async function runSweep(): Promise<void> {
+    setBusy(true);
+    try {
+      const res = await api.sweep();
+      pushLog(true, `${t('console.sweep')} → ${t('console.sweepDone', { n: res.created })}`);
+    } catch (e) {
+      pushLog(false, `${t('console.sweep')}: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const inputCls =
     'w-full rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-500';
   const cardCls = 'rounded-xl border border-slate-800 bg-slate-900/60 p-4';
@@ -201,7 +213,16 @@ export function StaffConsole() {
             >
               {t('console.refresh')}
             </button>
+            <button
+              type="button"
+              onClick={() => void runSweep()}
+              disabled={busy}
+              className="ml-auto rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-400 disabled:opacity-50"
+            >
+              {t('console.sweep')}
+            </button>
           </div>
+          <p className="mt-2 text-[11px] text-slate-500">{t('console.sweepHint')}</p>
         </div>
 
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
