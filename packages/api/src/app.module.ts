@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { HealthController } from './health/health.controller';
 import { DatabaseModule } from './database/database.module';
+import { AuthModule } from './auth/auth.module';
 import { EventsModule } from './events/events.module';
 import { ObjectsModule } from './objects/objects.module';
 import { ReportsModule } from './reports/reports.module';
@@ -15,6 +16,7 @@ import { OverviewModule } from './overview/overview.module';
     ConfigModule.forRoot({ isGlobal: true }),
     EventsModule,
     DatabaseModule,
+    AuthModule,
     ObjectsModule,
     ReportsModule,
     UploadsModule,
