@@ -3,12 +3,16 @@
  * Proves: report → Communication, sender → provisioned Staff, events-on-change,
  * author + QR-scan reference links, idempotency by clientMessageId (per tenant), and
  * that the same clientMessageId in another tenant is independent. Uses random tenants.
+ *
+ * S0-3: the author now comes from the resolved `identity` (here a dev-shim identity), not the
+ * request body. Handle-based provisioning still applies for the dev shim.
  */
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import { requireDatabaseUrl } from '../db/env';
 import { ReportsRepository } from '../src/reports/reports.repository';
+import type { SessionIdentity } from '../src/auth/session.types';
 import { closePool } from '../src/database/pool';
 
 let passed = 0;
@@ -22,6 +26,12 @@ function check(cond: boolean, label: string): void {
     console.error(`  ✗ ${label}`);
   }
 }
+const devId = (tenantId: string, handle: string, displayName?: string): SessionIdentity => ({
+  subject: 'dev',
+  tenantId,
+  staffHandle: handle,
+  staffDisplayName: displayName,
+});
 
 async function scalarCount(admin: Client, sql: string, params: unknown[]): Promise<number> {
   const res = await admin.query<{ n: number }>(sql, params);
@@ -40,13 +50,7 @@ async function main(): Promise<void> {
   try {
     console.log('S1-2 report ingest:');
 
-    const r1 = await repo.ingest(A, {
-      clientMessageId: 'm-1',
-      reportType: 'clock_in',
-      staffHandle: 'openid-a1',
-      staffDisplayName: 'A1',
-      text: 'on shift',
-    });
+    const r1 = await repo.ingest(A, { clientMessageId: 'm-1', reportType: 'clock_in', text: 'on shift' }, devId(A, 'openid-a1', 'A1'));
     check(r1.deduped === false && !!r1.communicationId && !!r1.staffId, 'first ingest creates Communication + Staff');
 
     const comm = await admin.query<{ properties: Record<string, unknown> }>(
@@ -75,14 +79,14 @@ async function main(): Promise<void> {
       'author reference link created',
     );
 
-    const r1b = await repo.ingest(A, { clientMessageId: 'm-1', reportType: 'clock_in', staffHandle: 'openid-a1' });
+    const r1b = await repo.ingest(A, { clientMessageId: 'm-1', reportType: 'clock_in' }, devId(A, 'openid-a1'));
     check(r1b.deduped === true && r1b.communicationId === r1.communicationId, 'replay with same clientMessageId dedupes');
     check(
       (await scalarCount(admin, `SELECT count(*)::int AS n FROM objects WHERE tenant_id=$1 AND type='Communication' AND properties->>'clientMessageId'='m-1'`, [A])) === 1,
       'no duplicate Communication for replayed id',
     );
 
-    const r2 = await repo.ingest(A, { clientMessageId: 'm-2', reportType: 'event', staffHandle: 'openid-a1', text: 'pretest queue building' });
+    const r2 = await repo.ingest(A, { clientMessageId: 'm-2', reportType: 'event', text: 'pretest queue building' }, devId(A, 'openid-a1'));
     check(r2.staffId === r1.staffId, 'same handle reuses the provisioned Staff');
 
     const visit = await admin.query<{ id: string }>(
@@ -90,18 +94,17 @@ async function main(): Promise<void> {
       [A],
     );
     const visitId = visit.rows[0]!.id;
-    const r3 = await repo.ingest(A, {
-      clientMessageId: 'm-3',
-      reportType: 'scan',
-      staffHandle: 'openid-a1',
-      scans: [{ scannedObjectType: 'Visit', scannedObjectId: visitId, at: new Date().toISOString() }],
-    });
+    const r3 = await repo.ingest(
+      A,
+      { clientMessageId: 'm-3', reportType: 'scan', scans: [{ scannedObjectType: 'Visit', scannedObjectId: visitId, at: new Date().toISOString() }] },
+      devId(A, 'openid-a1'),
+    );
     check(
       (await scalarCount(admin, `SELECT count(*)::int AS n FROM links WHERE from_object=$1 AND to_object=$2 AND relation='references'`, [r3.communicationId, visitId])) === 1,
       'QR scan creates a references link to the scanned object',
     );
 
-    const rB = await repo.ingest(B, { clientMessageId: 'm-1', reportType: 'clock_in', staffHandle: 'openid-b1' });
+    const rB = await repo.ingest(B, { clientMessageId: 'm-1', reportType: 'clock_in' }, devId(B, 'openid-b1'));
     check(rB.deduped === false && rB.communicationId !== r1.communicationId, 'same clientMessageId in another tenant is independent');
   } finally {
     await admin.end();
