@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
 /**
  * In-process domain event seam that closes the agentic loop:
@@ -18,20 +18,29 @@ export type DomainEventHandler = (event: DomainEvent) => Promise<void> | void;
 
 @Injectable()
 export class DomainEventBus {
-  private readonly handlers = new Map<string, DomainEventHandler[]>();
+  private readonly logger = new Logger(DomainEventBus.name);
+  private readonly handlers = new Map<string, Array<{ handler: DomainEventHandler; label: string }>>();
 
-  on(type: string, handler: DomainEventHandler): void {
+  /** Subscribe to an event type. `label` names the subscriber for error attribution. */
+  on(type: string, handler: DomainEventHandler, label = 'anonymous'): void {
     const list = this.handlers.get(type) ?? [];
-    list.push(handler);
+    list.push({ handler, label });
     this.handlers.set(type, list);
   }
 
   async publish(event: DomainEvent): Promise<void> {
-    for (const handler of this.handlers.get(event.type) ?? []) {
+    for (const { handler, label } of this.handlers.get(event.type) ?? []) {
       try {
         await handler(event);
-      } catch {
-        /* isolate subscriber failures from the producer */
+      } catch (err) {
+        // Isolate subscriber failures from the producer — but NEVER swallow silently: a broken
+        // handler (e.g. the recommendation pipeline) would otherwise fail invisibly in prod.
+        this.logger.error(
+          `handler "${label}" failed for ${event.type} (object ${event.objectId}): ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+          err instanceof Error ? err.stack : undefined,
+        );
       }
     }
   }
