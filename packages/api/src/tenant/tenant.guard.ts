@@ -21,6 +21,7 @@ export function headerTenantAllowed(nodeEnv: string | undefined): boolean {
 /** Minimal structural shape of the request we rely on (avoids an express type dep). */
 export interface TenantRequest {
   header(name: string): string | undefined;
+  query?: Record<string, unknown>;
   tenantId?: string;
 }
 
@@ -43,11 +44,16 @@ export class TenantGuard implements CanActivate {
       );
     }
     const req = context.switchToHttp().getRequest<TenantRequest>();
-    const header = req.header('x-tenant-id');
-    if (!isUuid(header)) {
-      throw new BadRequestException('Missing or invalid X-Tenant-Id header (expected a UUID).');
+    // Header is primary; a `tenantId` query param is accepted too (dev-only) so browser
+    // EventSource (SSE) — which cannot set headers — can pass the tenant. Both are gated
+    // by headerTenantAllowed above; S0-3 replaces all of this with the session.
+    const fromHeader = req.header('x-tenant-id');
+    const fromQuery = typeof req.query?.tenantId === 'string' ? req.query.tenantId : undefined;
+    const tenant = fromHeader ?? fromQuery;
+    if (!isUuid(tenant)) {
+      throw new BadRequestException('Missing or invalid tenant (X-Tenant-Id header or tenantId query, UUID).');
     }
-    req.tenantId = header;
+    req.tenantId = tenant;
     return true;
   }
 }
