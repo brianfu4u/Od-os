@@ -21,7 +21,9 @@
     "test:recommendations": "tsx test/recommendation-integration.ts",
     "test:overview": "tsx test/overview-integration.ts",
     "test:sweep": "tsx test/sweep-integration.ts",
-    "test:integration": "pnpm run test:objects && pnpm run test:reports && pnpm run test:uploads && pnpm run test:verification && pnpm run test:recommendations && pnpm run test:overview && pnpm run test:sweep",
+    "test:db-safety": "tsx test/db-safety-integration.ts",
+    "test:session": "tsx test/session-auth-integration.ts",
+    "test:integration": "pnpm run test:db-safety && pnpm run test:objects && pnpm run test:reports && pnpm run test:uploads && pnpm run test:verification && pnpm run test:recommendations && pnpm run test:overview && pnpm run test:sweep && pnpm run test:session",
     "test:http-smoke": "node test/http-smoke.mjs"
   },
   "dependencies": {
