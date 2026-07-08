@@ -14,7 +14,7 @@ function ctx(over: Partial<AgentContext['object']>, alert?: AgentContext['alert'
 describe('domain agents', () => {
   it('patient-flow fires on a conflicted turnover task', () => {
     const out = new PatientFlowAgent().propose(
-      ctx({ properties: { taskType: 'room_turnover', label: 'Room 3' }, verifiedState: 'conflict', confidence: 0.76 }, {
+      ctx({ properties: { taskType: 'room_turnover', label: 'Room 3' }, verifiedState: 'conflict', confidence: 0.5 }, {
         id: 'a1',
         triggered: ['conflict'],
         severity: 'high',
