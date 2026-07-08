@@ -50,9 +50,24 @@ export async function runHttpSmoke({
   check(ov1.ledger.length >= 2, `overview.ledger seeded entries = ${ov1.ledger.length}`);
   check(ov1.comms.length >= 1, `overview.comms = ${ov1.comms.length}`);
 
-  // dev tenant guard: missing/invalid tenant → 400
+  // dev tenant guard: missing/invalid tenant → 400 (dev shim requires a tenant)
   const noTenant = await fetch(`${base}/overview`);
   check(noTenant.status === 400, `GET /overview without tenant → 400 (got ${noTenant.status})`);
+
+  // S0-3: a dev-login session authenticates via Bearer token (no self-reported X-Tenant-Id).
+  const login = await (
+    await fetch(`${base}/auth/staff/dev-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tenantId: tenant, handle: 'smoke-staff', displayName: 'Smoke Staff' }),
+    })
+  ).json();
+  check(!!login.token && !!login.identity?.staffId, 'POST /auth/staff/dev-login issues a staff session');
+  const bySession = await fetch(`${base}/overview`, { headers: { Authorization: `Bearer ${login.token}` } });
+  check(bySession.ok, `GET /overview authorized by Bearer session, no X-Tenant-Id (got ${bySession.status})`);
+  const meResp = await fetch(`${base}/auth/me`, { headers: { Authorization: `Bearer ${login.token}` } });
+  const me = await meResp.json();
+  check(me?.tenantId === tenant && me?.subject === 'staff', 'GET /auth/me returns the session identity');
 
   const tasks = await (await fetch(`${base}/objects?type=Task`, { headers: H })).json();
   check(Array.isArray(tasks) && tasks.length >= 1, `GET /objects?type=Task → ${tasks.length} task(s)`);
