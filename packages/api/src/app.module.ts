@@ -8,6 +8,7 @@ import { ReportsModule } from './reports/reports.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { VerificationModule } from './verification/verification.module';
 import { RecommendationModule } from './recommendations/recommendation.module';
+import { OverviewModule } from './overview/overview.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { RecommendationModule } from './recommendations/recommendation.module';
     UploadsModule,
     VerificationModule,
     RecommendationModule,
+    OverviewModule,
   ],
   controllers: [HealthController],
 })
