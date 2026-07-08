@@ -61,6 +61,67 @@ export class RecommendationRepository {
     });
   }
 
+  /**
+   * Build agent contexts for EVERY candidate object in the tenant — the driver for the periodic
+   * recommendation sweep. The time-based domains (financial/marketing/equipment) don't wait on a
+   * verification event, so the sweep scans them directly. One tenant tx: candidate objects +
+   * latest Alert per object + an equipment "used-in-place" signal from QR-scan communications.
+   */
+  async gatherSweepContexts(tenantId: string): Promise<AgentContext[]> {
+    return withTenant(tenantId, async (c) => {
+      const CANDIDATE_TYPES = ['Task', 'InventoryItem', 'Invoice', 'Payment', 'Claim', 'Review', 'Lead', 'Campaign', 'Equipment'];
+      const objs = await c.query<ObjRow>(
+        `SELECT id, type, properties, verified_state, claimed_state, confidence
+           FROM objects
+          WHERE type = ANY($1) AND (properties->>'archived') IS DISTINCT FROM 'true'`,
+        [CANDIDATE_TYPES],
+      );
+
+      // Latest Alert per subject object (mirrors gatherContext, batched for the whole tenant).
+      const alertRows = await c.query<{ id: string; properties: Record<string, unknown> }>(
+        `SELECT id, properties FROM objects WHERE type = 'Alert' ORDER BY created_at DESC`,
+      );
+      const latestAlert = new Map<string, { id: string; triggered: string[]; severity: string; reason: string }>();
+      for (const a of alertRows.rows) {
+        const oid = typeof a.properties?.objectId === 'string' ? (a.properties.objectId as string) : null;
+        if (!oid || latestAlert.has(oid)) continue;
+        latestAlert.set(oid, {
+          id: a.id,
+          triggered: Array.isArray(a.properties.triggered) ? (a.properties.triggered as string[]) : [],
+          severity: typeof a.properties.severity === 'string' ? a.properties.severity : 'medium',
+          reason: typeof a.properties.reason === 'string' ? a.properties.reason : '',
+        });
+      }
+
+      // Equipment used-in-place: any Communication carrying a scan of an Equipment object.
+      const commRows = await c.query<{ properties: Record<string, unknown> }>(
+        `SELECT properties FROM objects WHERE type = 'Communication'`,
+      );
+      const scannedEquipment = new Set<string>();
+      for (const row of commRows.rows) {
+        const scans = Array.isArray(row.properties?.scans) ? (row.properties.scans as Array<Record<string, unknown>>) : [];
+        for (const s of scans) {
+          if (s?.scannedObjectType === 'Equipment' && typeof s.scannedObjectId === 'string') scannedEquipment.add(s.scannedObjectId);
+        }
+      }
+
+      const now = Date.now();
+      return objs.rows.map((o) => ({
+        object: {
+          id: o.id,
+          type: o.type,
+          properties: o.properties ?? {},
+          verifiedState: o.verified_state,
+          claimedState: o.claimed_state,
+          confidence: o.confidence === null ? null : Number(o.confidence),
+        },
+        alert: latestAlert.get(o.id) ?? null,
+        related: o.type === 'Equipment' ? { usageScan: scannedEquipment.has(o.id) } : undefined,
+        now,
+      }));
+    });
+  }
+
   /** Persist ranked candidates as Recommendation objects (idempotent per open objectId+title). */
   async persist(tenantId: string, ranked: RankedRecommendation[]): Promise<string[]> {
     return withTenant(tenantId, async (c) => {
