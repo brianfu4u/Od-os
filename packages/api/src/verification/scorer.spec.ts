@@ -23,12 +23,39 @@ describe('DeterministicScorer — Room 3 (§4)', () => {
   it('after the snapshot is attached → verified @ 0.93', () => {
     const r = scorer.score({
       ...base,
+      // required snapshot now SATISFIED (requiredMissing empty) → the timing anomaly is
+      // considered resolved (rule 3 no longer applies) → verified.
       evidence: [{ type: 'snapshot', supports: true, strength: 0.71, detail: 'turnover photo' }],
-      timingAnomaly: true, // still flagged, but strong evidence overrides → not a conflict
+      requiredMissing: [],
+      timingAnomaly: true,
     });
     expect(r.verifiedState).toBe('verified');
     expect(r.confidence).toBeCloseTo(0.93, 2);
     expect(r.triggered).toHaveLength(0);
+  });
+
+  it('a strong but NON-required signal (QR scan) does not clear a missing-snapshot timing conflict', () => {
+    // The smoke scenario: fast claim + a QR scan, but the required snapshot is still missing.
+    // The QR raises confidence yet does not satisfy the requirement → still a conflict, NOT pending.
+    const r = scorer.score({
+      ...base,
+      evidence: [{ type: 'qr_scan', supports: true, strength: 0.85, detail: 'scan referencing task' }],
+      requiredMissing: ['snapshot'],
+      timingAnomaly: true,
+    });
+    expect(r.verifiedState).toBe('conflict');
+    expect(r.triggered).toContain('conflict');
+    expect(r.triggered).toContain('missing_required');
+  });
+
+  it('timing anomaly with the requirement satisfied is NOT a conflict (anomaly resolved)', () => {
+    const r = scorer.score({
+      ...base,
+      evidence: [{ type: 'snapshot', supports: true, strength: 0.71, detail: 'photo' }],
+      requiredMissing: [],
+      timingAnomaly: true,
+    });
+    expect(r.verifiedState).toBe('verified');
   });
 });
 

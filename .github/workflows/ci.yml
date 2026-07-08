@@ -16,8 +16,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -28,7 +26,7 @@ jobs:
       - run: pnpm test
 
   db-isolation:
-    name: DB migrations · RLS isolation
+    name: DB migrations · RLS isolation · Integration
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -49,8 +47,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -65,3 +61,41 @@ jobs:
         run: pnpm db:seed
       - name: Prove cross-tenant isolation
         run: pnpm db:test
+      - run: pnpm --filter @clearview/api build
+      - name: Run integration tests (objects · reports · uploads · verification · recommendation · overview)
+        run: pnpm --filter @clearview/api test:integration
+
+  http-smoke:
+    name: Full-app HTTP smoke (boot API · loop · SSE)
+    runs-on: ubuntu-latest
+    needs: [build-test, db-isolation]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: clearview_od
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U postgres -d clearview_od"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/clearview_od
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @clearview/shared build
+      - run: pnpm --filter @clearview/api build
+      - run: pnpm db:migrate && pnpm db:seed
+      - name: Boot API and run the full-app HTTP smoke
+        env: { API_PORT: "3001", API_BASE: "http://localhost:3001", NODE_ENV: development }
+        run: |
+          node packages/api/dist/main.js &
+          API_PID=$!
+          node packages/api/test/http-smoke.mjs
+          STATUS=$?; kill $API_PID 2>/dev/null || true; exit $STATUS
