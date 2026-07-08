@@ -71,6 +71,9 @@ async function main(): Promise<void> {
     // cross-domain: a conflicted task (patient_flow) + a low inventory item (inventory)
     await insObject(admin, A, 'Task', { taskType: 'room_turnover', label: 'Room 5' }, { claimed: 'ready', verified: 'conflict', confidence: 0.5 });
     await insObject(admin, A, 'InventoryItem', { name: 'Fluorescein strips', onHand: 1, reorderPoint: 6 });
+    // staff: an overdue task + its overdue Alert (the sweep reads the latest Alert per object)
+    const overdue = await insObject(admin, A, 'Task', { taskType: 'pretest_done', label: 'Bay 2', dueBy: days(1), reassignTo: 'tech-2' }, { claimed: 'done', verified: 'pending', confidence: 0.5 });
+    await insObject(admin, A, 'Alert', { objectId: overdue, reason: 'overdue', severity: 'medium', triggered: ['overdue'] });
 
     // tenant B: one financial object that WOULD fire — to prove isolation.
     await insObject(admin, B, 'Claim', { label: 'B-CLM', missingFields: ['referral'] });
@@ -83,7 +86,8 @@ async function main(): Promise<void> {
     check(domains.has('financial'), 'financial cue present');
     check(domains.has('marketing'), 'marketing cue present');
     check(domains.has('equipment'), 'equipment cue present');
-    check(domains.size >= 4, `cues span ${domains.size} domains (≥4)`);
+    check(domains.has('staff'), 'staff cue present (overdue reassign)');
+    check(domains.size >= 5, `cues span ${domains.size} domains (≥5)`);
 
     const claimCue = feed.find((r) => r.domain === 'financial' && r.title.includes('referral'));
     check(!!claimCue, 'financial claim-missing-referral cue raised');

@@ -163,10 +163,10 @@ export async function runHttpSmoke({
   await sleep(200);
   const feed = await (await fetch(`${base}/recommendations?status=open&limit=50`, { headers: H })).json();
   const domains = new Set((Array.isArray(feed) ? feed : []).map((r) => r.domain));
-  check(domains.has('financial'), 'sweep produced a financial cue');
-  check(domains.has('marketing'), 'sweep produced a marketing cue');
-  check(domains.has('equipment'), 'sweep produced an equipment cue');
-  check(domains.size >= 4, `open cues span ${domains.size} domains (≥4)`);
+  for (const d of ['patient_flow', 'staff', 'inventory', 'financial', 'marketing', 'equipment']) {
+    check(domains.has(d), `sweep produced a ${d} cue`);
+  }
+  check(domains.size >= 6, `open cues span all ${domains.size} domains (≥6)`);
 
   ac.abort();
   await ssePromise;

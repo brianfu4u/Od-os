@@ -231,6 +231,34 @@ async function seedTenantA(client: Client): Promise<void> {
     },
   });
   await link(client, t, octScan, oct2, 'references');
+
+  // Staff: an OVERDUE pretest task (past due, still pending) + its overdue Alert → the staff
+  // agent proposes a reassignment on the next sweep (the sixth domain to light up). The Alert is
+  // seeded directly (the static seed doesn't run the verifier) exactly as the engine would raise it.
+  const overduePretest = await insObject(client, t, 'Task', {
+    properties: {
+      taskType: 'pretest_done',
+      label: 'Pretest · Bay 2',
+      requiredEvidence: ['document'],
+      dueBy: daysAgo(1),
+      reassignTo: 'A · Tech',
+    },
+    expected: 'done',
+    claimed: 'done',
+    verified: 'pending',
+    confidence: 0.5,
+  });
+  await insObject(client, t, 'Alert', {
+    properties: {
+      objectId: overduePretest,
+      reason: 'Past its due time and not yet verified; required document still missing.',
+      severity: 'medium',
+      triggered: ['overdue', 'missing_required'],
+      verifiedState: 'pending',
+      confidence: 0.5,
+    },
+  });
+  await link(client, t, staffTech, overduePretest, 'assignedTo');
 }
 
 async function seedTenantB(client: Client): Promise<void> {
