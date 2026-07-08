@@ -64,7 +64,13 @@
       "campaigns": "活动",
       "equipment": "设备台数",
       "lowStock": "低库存项",
-      "items": "库存品类"
+      "items": "库存品类",
+      "collected": "今日收款",
+      "unposted": "未入账",
+      "newLeads": "新线索",
+      "negativeReviews": "差评待复",
+      "ready": "可用",
+      "calibrationDue": "待校准"
     },
     "notes": {
       "staff": "排班均衡,无异常",

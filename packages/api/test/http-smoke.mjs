@@ -150,6 +150,24 @@ export async function runHttpSmoke({
   check(ov2.ledger.length > ov1.ledger.length, `overview.ledger grew after the loop (${ov1.ledger.length} → ${ov2.ledger.length})`);
   check(ov2.comms.length > ov1.comms.length, `overview.comms grew (${ov1.comms.length} → ${ov2.comms.length})`);
 
+  // ── S3+ six-domain coverage: tile metrics + the recommendation sweep ──
+  log('\nsix-domain sweep:');
+  const m = ov2.metrics ?? {};
+  check(m.unposted >= 1, `overview.metrics.unposted = ${m.unposted} (financial)`);
+  check(m.negativeReviews >= 1, `overview.metrics.negativeReviews = ${m.negativeReviews} (marketing)`);
+  check(m.calibrationDue >= 1, `overview.metrics.calibrationDue = ${m.calibrationDue} (equipment)`);
+  check(m.collectedCents >= 1, `overview.metrics.collectedCents = ${m.collectedCents} (financial $${Math.round((m.collectedCents ?? 0) / 100)})`);
+
+  const swept = await (await fetch(`${base}/recommendations/sweep`, { method: 'POST', headers: H })).json();
+  check((swept.created ?? 0) >= 4, `POST /recommendations/sweep created ${swept.created} cues`);
+  await sleep(200);
+  const feed = await (await fetch(`${base}/recommendations?status=open&limit=50`, { headers: H })).json();
+  const domains = new Set((Array.isArray(feed) ? feed : []).map((r) => r.domain));
+  check(domains.has('financial'), 'sweep produced a financial cue');
+  check(domains.has('marketing'), 'sweep produced a marketing cue');
+  check(domains.has('equipment'), 'sweep produced an equipment cue');
+  check(domains.size >= 4, `open cues span ${domains.size} domains (≥4)`);
+
   ac.abort();
   await ssePromise;
   check(sseEvents >= 1, `SSE stream emitted ${sseEvents} change event(s) during the loop`);

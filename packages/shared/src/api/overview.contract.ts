@@ -30,6 +30,12 @@ export interface OverviewResult {
   /** Object counts by type (Staff, Task, InventoryItem, Communication, Alert, Recommendation, …). */
   counts: Record<string, number>;
   inventoryLow: number;
+  /**
+   * Domain-specific tile metrics for the six-domain grid (financial/marketing/equipment need
+   * property-level aggregation the raw type counts can't give). Keys: collectedCents, unposted,
+   * negativeReviews, equipmentReady, calibrationDue. Missing keys default to 0 in the UI.
+   */
+  metrics: Record<string, number>;
   ledger: LedgerEntrySummary[];
   comms: CommSummary[];
 }

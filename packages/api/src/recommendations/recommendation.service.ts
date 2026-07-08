@@ -39,6 +39,24 @@ export class RecommendationService {
     return created;
   }
 
+  /**
+   * Periodic sweep: run every domain agent over ALL candidate objects in the tenant, de-conflict
+   * and rank across all six domains, and persist the surviving cues. This is how the time-based
+   * domains (financial/marketing/equipment) surface — they don't wait on a verification event.
+   * A higher cap than the live per-object feed so a full scan can show every domain at once.
+   */
+  async sweep(tenantId: string): Promise<string[]> {
+    const contexts = await this.repo.gatherSweepContexts(tenantId);
+    const candidates = contexts.flatMap((ctx) => this.agents.flatMap((agent) => agent.propose(ctx)));
+    if (candidates.length === 0) return [];
+    const ranked = this.orchestrator.orchestrate(candidates, 25);
+    const created = await this.repo.persist(tenantId, ranked);
+    for (const id of created) {
+      this.realtime.publish({ kind: 'created', tenantId, objectId: id, type: 'Recommendation', at: new Date().toISOString() });
+    }
+    return created;
+  }
+
   feed(tenantId: string, status: RecommendationStatus, limit: number): Promise<RecommendationRecord[]> {
     return this.repo.getFeed(tenantId, status, limit);
   }
