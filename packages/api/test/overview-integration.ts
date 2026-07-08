@@ -54,7 +54,7 @@ async function main(): Promise<void> {
     console.log('overview aggregate:');
 
     await insObject(admin, T, 'Staff', { role: 'front_desk', displayName: 'A · Front Desk' });
-    await insObject(admin, T, 'Room', { label: 'Room 3' }, 'conflict', 0.76);
+    await insObject(admin, T, 'Room', { label: 'Room 3' }, 'conflict', 0.5);
     await insObject(admin, T, 'InventoryItem', { sku: 'CLS-500', onHand: 3, reorderPoint: 5 });
     await insObject(admin, T, 'InventoryItem', { sku: 'OK-1', onHand: 20, reorderPoint: 5 }); // healthy
     const task = await insObject(
@@ -63,7 +63,7 @@ async function main(): Promise<void> {
       'Task',
       { taskType: 'room_turnover', requiredEvidence: ['snapshot'] },
       'conflict',
-      0.76,
+      0.5,
     );
     // An overdue task: dueBy in the past and not verified.
     await insObject(admin, T, 'Task', { taskType: 'inventory_reorder', dueBy: past }, null, null);
@@ -80,12 +80,12 @@ async function main(): Promise<void> {
     // Ledger: conflict earlier, verified later → newest-first must surface the verified row.
     await admin.query(
       `INSERT INTO verification_ledger (tenant_id, object_id, verified_state, confidence, evidence, reason, created_at)
-       VALUES ($1,$2,'conflict',0.76,$3::jsonb,'missing snapshot', '2026-07-07T09:00:00Z')`,
+       VALUES ($1,$2,'conflict',0.5,$3::jsonb,'missing snapshot', '2026-07-07T09:00:00Z')`,
       [T, task, JSON.stringify([{ kind: 'communication' }])],
     );
     await admin.query(
       `INSERT INTO verification_ledger (tenant_id, object_id, verified_state, confidence, evidence, reason, created_at)
-       VALUES ($1,$2,'verified',0.93,$3::jsonb,'snapshot matches SOP', '2026-07-07T09:05:00Z')`,
+       VALUES ($1,$2,'verified',0.855,$3::jsonb,'snapshot matches SOP', '2026-07-07T09:05:00Z')`,
       [T, task, JSON.stringify([{ kind: 'communication' }, { kind: 'snapshot' }])],
     );
 
