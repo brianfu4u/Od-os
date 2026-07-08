@@ -18,7 +18,9 @@
     "test:reports": "tsx test/reports-integration.ts",
     "test:uploads": "tsx test/uploads-integration.ts",
     "test:verification": "tsx test/verification-integration.ts",
-    "test:recommendations": "tsx test/recommendation-integration.ts"
+    "test:recommendations": "tsx test/recommendation-integration.ts",
+    "test:overview": "tsx test/overview-integration.ts",
+    "test:http-smoke": "node test/http-smoke.mjs"
   },
   "dependencies": {
     "@clearview/shared": "workspace:*",
