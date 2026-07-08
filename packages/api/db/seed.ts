@@ -2,7 +2,7 @@
  * Synthetic, privacy-safe seed data (NO PHI). Runs as the DB owner (bypasses RLS)
  * and populates two tenants so multi-tenant behaviour is visible immediately.
  * Tenant A reproduces the "Room 3 turnover" cross-verification story from
- * docs/01-structure-design.md §4 (conflict @0.76 → verified @0.93 in the ledger).
+ * docs/01-structure-design.md §4 (conflict @0.50 → verified @0.855 in the ledger).
  */
 import { Client } from 'pg';
 import type { MvpTaskType } from '@clearview/shared';
@@ -96,7 +96,7 @@ async function seedTenantA(client: Client): Promise<void> {
     expected: 'ready',
     claimed: 'ready',
     verified: 'conflict',
-    confidence: 0.76,
+    confidence: 0.5,
   });
 
   const solution = await insObject(client, t, 'InventoryItem', {
@@ -109,7 +109,7 @@ async function seedTenantA(client: Client): Promise<void> {
     expected: 'ready',
     claimed: 'ready',
     verified: 'conflict',
-    confidence: 0.76,
+    confidence: 0.5,
   });
 
   const reorder: MvpTaskType = 'inventory_reorder';
@@ -141,7 +141,7 @@ async function seedTenantA(client: Client): Promise<void> {
   const verification = await insObject(client, t, 'Verification', {
     properties: { method: 'cross-verify' },
     verified: 'verified',
-    confidence: 0.93,
+    confidence: 0.855,
   });
 
   // relations
@@ -172,7 +172,7 @@ async function seedTenantA(client: Client): Promise<void> {
     t,
     taskTurnover,
     'conflict',
-    0.76,
+    0.5,
     [{ kind: 'communication', ref: comm }],
     'Required snapshot missing; prior patient checked out <6min ago (timing anomaly).',
   );
@@ -181,7 +181,7 @@ async function seedTenantA(client: Client): Promise<void> {
     t,
     taskTurnover,
     'verified',
-    0.93,
+    0.855,
     [
       { kind: 'communication', ref: comm },
       { kind: 'snapshot', ref: snapshot },

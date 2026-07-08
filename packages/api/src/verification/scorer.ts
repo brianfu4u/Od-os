@@ -12,6 +12,18 @@ export interface ScoreInput {
   timingAnomaly: boolean;
   crossObjectContradiction: boolean;
   threshold: number;
+  /**
+   * S0-7: per-evidence-kind multiplier from the task's TaskSopConfig. Each supporting item's
+   * strength is scaled by weights[item.type] (default 1.0 = neutral, pre-S0-7 behavior)
+   * before it is folded into confidence. Contradictions are NOT down-weighted — a conflict
+   * signal must never be softened by a task-specific weight.
+   */
+  weights?: Record<string, number>;
+  /**
+   * S0-7: base confidence for a lone matching self-claim, from TaskSopConfig.baseSelfClaim.
+   * Defaults to BASE_SELF_CLAIM. This is the base self-claim lever (see sop-config.ts).
+   */
+  baseSelfClaim?: number;
 }
 
 /** Pluggable scoring seam — an LLM scorer can implement this later for free-text/voice nuance. */
@@ -22,8 +34,17 @@ export interface Scorer {
 /** DI token for the active Scorer (swap DeterministicScorer → an LLM scorer later). */
 export const SCORER = 'SCORER';
 
-/** Confidence in a lone, credible self-claim before independent evidence (calibrated to §4). */
-export const BASE_SELF_CLAIM = 0.76;
+/**
+ * Confidence in a lone, matching self-claim BEFORE any independent evidence.
+ *
+ * FROZEN at 0.50 in the S0-7 clinic freeze: a bare, unevidenced "I did it" is an honest
+ * coin-flip — unproven, equally likely either way — NOT near-certain. It is the single base
+ * lever (a task may override per-task via TaskSopConfig.baseSelfClaim). Every founder-frozen
+ * §4 precedence transition still holds: one required snapshot (strength 0.71) lands a claim at
+ * 0.50 + (1−0.50)·0.71 = 0.855 ≥ 0.85 → verified, while a lone claim stays a coin-flip
+ * (0.50 → pending / low_confidence) instead of masquerading as "probably true."
+ */
+export const BASE_SELF_CLAIM = 0.5;
 
 const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
 const round3 = (n: number): number => Math.round(n * 1000) / 1000;
@@ -44,17 +65,27 @@ const round3 = (n: number): number => Math.round(n * 1000) / 1000;
  *   5. confidence ≥ threshold (required satisfied, no conflict) ⇒ verified
  *   6. otherwise                                    ⇒ pending (low_confidence)
  *
- * §4 Room-3: claim-only + too-fast + snapshot missing ⇒ conflict (rule 3). Once the required
- * snapshot is attached, the requirement is satisfied → the timing anomaly is treated as resolved
- * (rule 3 no longer applies) → verified (rule 5). Same input ⇒ same output.
+ * §4 Room-3: claim-only + too-fast + snapshot missing ⇒ conflict @0.50 (rule 3). Once the
+ * required snapshot is attached, the requirement is satisfied → the timing anomaly is treated
+ * as resolved (rule 3 no longer applies) → verified @0.855 (rule 5). Same input ⇒ same output.
  */
 export class DeterministicScorer implements Scorer {
   score(input: ScoreInput): VerificationResult {
     const supporting = input.evidence.filter((e) => e.supports);
     const contradicting = input.evidence.filter((e) => !e.supports);
 
-    let confidence = input.claimPresent && input.claimMatchesExpected ? BASE_SELF_CLAIM : 0;
-    for (const e of supporting) confidence = confidence + (1 - confidence) * clamp01(e.strength);
+    // S0-7: per-task base and per-kind weights. Defaults reproduce the §4 arithmetic (base 0.50).
+    const base = input.baseSelfClaim ?? BASE_SELF_CLAIM;
+    const weightFor = (type: string): number => {
+      const w = input.weights?.[type];
+      return typeof w === 'number' && Number.isFinite(w) ? clamp01(w) : 1;
+    };
+
+    let confidence = input.claimPresent && input.claimMatchesExpected ? clamp01(base) : 0;
+    for (const e of supporting) {
+      const effective = clamp01(e.strength * weightFor(e.type));
+      confidence = confidence + (1 - confidence) * effective;
+    }
     confidence = clamp01(confidence);
 
     const requiredSatisfied = input.requiredMissing.length === 0;

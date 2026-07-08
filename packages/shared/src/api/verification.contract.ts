@@ -33,11 +33,26 @@ export interface VerificationResult {
   triggered: TriggerReason[];
 }
 
-/** Per-task-type SOP config (frozen in S0-7; sensible defaults until then). */
+/**
+ * Per-task-type SOP config (frozen with the clinic in S0-7).
+ *
+ * S0-7 adds two calibration knobs so the freeze can be tuned per task type without an
+ * engine change:
+ *  - `evidenceWeights`: per-evidence-kind multiplier applied to each item's normalized
+ *    strength before it is folded into confidence. 1.0 = neutral (pre-S0-7 behavior).
+ *    Lets a task type say "a snapshot is worth more than a document" for THIS task.
+ *  - `baseSelfClaim`: the confidence a lone, matching self-claim carries BEFORE any
+ *    independent evidence. Defaults to the calibrated global (DEFAULT_BASE_SELF_CLAIM).
+ *    See sop-config.ts for the base-0.50-vs-0.76 decision that this field exposes.
+ */
 export interface TaskSopConfig {
   taskType: string;
   expectedState: string;
   expectedDurationMin?: number;
   requiredEvidence: string[];
   confidenceThreshold: number;
+  /** Per-evidence-kind strength multiplier (default 1.0 per kind). */
+  evidenceWeights?: Record<string, number>;
+  /** Base confidence for a lone matching self-claim (default DEFAULT_BASE_SELF_CLAIM). */
+  baseSelfClaim?: number;
 }

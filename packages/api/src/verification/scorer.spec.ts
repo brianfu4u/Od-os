@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { DeterministicScorer, type ScoreInput } from './scorer';
+import { DeterministicScorer, BASE_SELF_CLAIM, type ScoreInput } from './scorer';
+import { COIN_FLIP_BASE_SELF_CLAIM } from './sop-config';
 
 const scorer = new DeterministicScorer();
 const base: ScoreInput = {
@@ -13,14 +14,14 @@ const base: ScoreInput = {
 };
 
 describe('DeterministicScorer — Room 3 (§4)', () => {
-  it('claim-only + missing required snapshot + timing anomaly → conflict @ 0.76', () => {
+  it('claim-only + missing required snapshot + timing anomaly → conflict @ 0.50', () => {
     const r = scorer.score({ ...base, requiredMissing: ['snapshot'], timingAnomaly: true });
     expect(r.verifiedState).toBe('conflict');
-    expect(r.confidence).toBeCloseTo(0.76, 2);
+    expect(r.confidence).toBeCloseTo(0.5, 2);
     expect(r.triggered).toContain('conflict');
   });
 
-  it('after the snapshot is attached → verified @ 0.93', () => {
+  it('after the snapshot is attached → verified @ 0.855', () => {
     const r = scorer.score({
       ...base,
       // required snapshot now SATISFIED (requiredMissing empty) → the timing anomaly is
@@ -30,7 +31,7 @@ describe('DeterministicScorer — Room 3 (§4)', () => {
       timingAnomaly: true,
     });
     expect(r.verifiedState).toBe('verified');
-    expect(r.confidence).toBeCloseTo(0.93, 2);
+    expect(r.confidence).toBeCloseTo(0.855, 3);
     expect(r.triggered).toHaveLength(0);
   });
 
@@ -79,5 +80,67 @@ describe('DeterministicScorer — rules', () => {
   it('is deterministic (same input → same output)', () => {
     const input = { ...base, evidence: [{ type: 'qr_scan' as const, supports: true, strength: 0.85, detail: 'scan' }] };
     expect(scorer.score(input)).toEqual(scorer.score(input));
+  });
+});
+
+describe('DeterministicScorer — S0-7 per-task evidenceWeights + baseSelfClaim', () => {
+  it('default (no weights) reproduces the frozen §4 arithmetic: claim + snapshot(0.71) → 0.855', () => {
+    const r = scorer.score({
+      ...base,
+      evidence: [{ type: 'snapshot', supports: true, strength: 0.71, detail: 'photo' }],
+    });
+    // base 0.50 (frozen): 0.50 + (1-0.50)*0.71 = 0.855
+    expect(r.confidence).toBeCloseTo(0.855, 3);
+    expect(BASE_SELF_CLAIM).toBe(0.5);
+  });
+
+  it('a per-task weight < 1 down-weights that evidence kind (0.5 halves the snapshot signal)', () => {
+    const r = scorer.score({
+      ...base,
+      evidence: [{ type: 'snapshot', supports: true, strength: 0.71, detail: 'photo' }],
+      weights: { snapshot: 0.5 },
+    });
+    // effective = 0.71*0.5 = 0.355 → 0.50 + (1-0.50)*0.355 = 0.6775 → 0.678
+    expect(r.confidence).toBeCloseTo(0.678, 3);
+  });
+
+  it('weight 1.0 is neutral (identical to omitting weights)', () => {
+    const withW = scorer.score({
+      ...base,
+      evidence: [{ type: 'qr_scan', supports: true, strength: 0.85, detail: 'scan' }],
+      weights: { qr_scan: 1.0 },
+    });
+    const without = scorer.score({
+      ...base,
+      evidence: [{ type: 'qr_scan', supports: true, strength: 0.85, detail: 'scan' }],
+    });
+    expect(withW.confidence).toBe(without.confidence);
+  });
+
+  it('a single required snapshot verifies from the coin-flip base: 0.50 → 0.855 ≥ 0.85', () => {
+    const r = scorer.score({
+      ...base,
+      evidence: [{ type: 'snapshot', supports: true, strength: 0.71, detail: 'photo' }],
+      baseSelfClaim: COIN_FLIP_BASE_SELF_CLAIM,
+    });
+    // 0.50 + (1-0.50)*0.71 = 0.855
+    expect(r.confidence).toBeCloseTo(0.855, 3);
+    expect(r.verifiedState).toBe('verified');
+  });
+
+  it('a bare claim is a true coin-flip (0.50, below threshold → pending low_confidence)', () => {
+    const r = scorer.score({ ...base, baseSelfClaim: COIN_FLIP_BASE_SELF_CLAIM });
+    expect(r.confidence).toBeCloseTo(0.5, 3);
+    expect(r.verifiedState).toBe('pending');
+    expect(r.triggered).toContain('low_confidence');
+  });
+
+  it('per-task weight never softens a contradiction (conflict precedence survives weighting)', () => {
+    const r = scorer.score({
+      ...base,
+      evidence: [{ type: 'cross_object', supports: false, strength: 0.6, detail: 'room still occupied' }],
+      weights: { cross_object: 0 },
+    });
+    expect(r.verifiedState).toBe('conflict');
   });
 });
