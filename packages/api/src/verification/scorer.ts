@@ -31,10 +31,22 @@ const round3 = (n: number): number => Math.round(n * 1000) / 1000;
 /**
  * Deterministic, explainable scorer.
  * confidence starts at BASE_SELF_CLAIM for a matching claim, then each INDEPENDENT supporting
- * item raises it toward 1 with diminishing returns: c ← c + (1−c)·strength. State is decided by
- * hard rules: a contradiction (contradicting evidence, cross-object conflict, or a timing anomaly
- * unbacked by strong evidence) ⇒ conflict; required evidence missing ⇒ at most pending; else
- * confidence ≥ threshold ⇒ verified. Same input ⇒ same output.
+ * item raises it toward 1 with diminishing returns: c ← c + (1−c)·strength.
+ *
+ * State machine — precedence (founder-frozen; §4 Room-3 must survive it):
+ *   1. no claim                                    ⇒ unverified
+ *   2. explicit contradiction (contradicting/cross-object)                 ⇒ conflict
+ *   3. timing anomaly WHILE the REQUIRED evidence is not yet satisfied      ⇒ conflict
+ *      (a suspiciously fast claim you cannot yet prove — this OVERRIDES the
+ *       required-missing→pending cap; a strong but non-required signal such as
+ *       a QR scan does NOT clear it — only the actual required evidence does)
+ *   4. required evidence missing, no anomaly        ⇒ pending (missing_required)
+ *   5. confidence ≥ threshold (required satisfied, no conflict) ⇒ verified
+ *   6. otherwise                                    ⇒ pending (low_confidence)
+ *
+ * §4 Room-3: claim-only + too-fast + snapshot missing ⇒ conflict (rule 3). Once the required
+ * snapshot is attached, the requirement is satisfied → the timing anomaly is treated as resolved
+ * (rule 3 no longer applies) → verified (rule 5). Same input ⇒ same output.
  */
 export class DeterministicScorer implements Scorer {
   score(input: ScoreInput): VerificationResult {
@@ -45,18 +57,21 @@ export class DeterministicScorer implements Scorer {
     for (const e of supporting) confidence = confidence + (1 - confidence) * clamp01(e.strength);
     confidence = clamp01(confidence);
 
-    const strongSupport = supporting.some((e) => e.strength >= 0.5);
-    const hasContradiction =
-      contradicting.length > 0 || input.crossObjectContradiction || (input.timingAnomaly && !strongSupport);
+    const requiredSatisfied = input.requiredMissing.length === 0;
+    const explicitContradiction = contradicting.length > 0 || input.crossObjectContradiction;
+    // A timing anomaly is a hard conflict ONLY while the required evidence is still missing;
+    // satisfying the requirement resolves it (that is the §4 conflict→verified transition).
+    const conflict = explicitContradiction || (input.timingAnomaly && !requiredSatisfied);
 
     const triggered: TriggerReason[] = [];
     let verifiedState: VerifiedState;
     if (!input.claimPresent) {
       verifiedState = 'unverified';
-    } else if (hasContradiction) {
+    } else if (conflict) {
       verifiedState = 'conflict';
       triggered.push('conflict');
-    } else if (input.requiredMissing.length > 0) {
+      if (!requiredSatisfied) triggered.push('missing_required');
+    } else if (!requiredSatisfied) {
       verifiedState = 'pending';
       triggered.push('missing_required');
     } else if (confidence >= input.threshold) {
