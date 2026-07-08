@@ -65,7 +65,13 @@
       "campaigns": "施策",
       "equipment": "設備台数",
       "lowStock": "在庫僅少",
-      "items": "品目"
+      "items": "品目",
+      "collected": "本日入金",
+      "unposted": "未計上",
+      "newLeads": "新規リード",
+      "negativeReviews": "要返信レビュー",
+      "ready": "稼働可",
+      "calibrationDue": "校正期限"
     },
     "notes": {
       "staff": "配置は均衡、異常なし",
