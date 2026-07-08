@@ -22,6 +22,17 @@ export class RecommendationController {
     return this.recommendations.tempo(tenantId);
   }
 
+  /**
+   * Periodic sweep across all six domains — runs every agent over the tenant's candidate objects
+   * and persists ranked cues. Declared before the ':id/*' routes so 'sweep' isn't read as an id.
+   * A scheduler (or the demo/staff console) triggers this; advise-only, no world writes.
+   */
+  @Post('sweep')
+  async sweep(@TenantId() tenantId: string) {
+    const created = await this.recommendations.sweep(tenantId);
+    return { created: created.length, ids: created };
+  }
+
   // Human-in-the-loop: these record intent + emit an event; no world action runs in S3.
   @Post(':id/approve')
   approve(@TenantId() tenantId: string, @Param('id') id: string) {
