@@ -1,14 +1,20 @@
 {
   "app": {
-    "title": "Clearview OD",
-    "subtitle": "眼科诊所实时运营操作系统",
-    "badge": "Sprint 0 · 骨架"
+    "title": "Clearview 眼科 · 指挥中心",
+    "badge": "实时 · 合成演示",
+    "navConsole": "员工终端"
+  },
+  "feed": {
+    "live": "实时连接",
+    "connecting": "连接中…",
+    "offline": "离线"
   },
   "loop": {
     "label": "智能体循环",
+    "gate": "批准",
     "stages": {
       "sense": "感知",
-      "map": "映射",
+      "map": "映射到本体",
       "verify": "交叉验证",
       "reason": "推理",
       "recommend": "建议",
@@ -16,9 +22,25 @@
       "learn": "学习"
     }
   },
+  "podium": {
+    "tempo": "运营节拍",
+    "tempoGood": "节奏良好",
+    "tempoWatch": "需关注",
+    "tempoAct": "需行动",
+    "branch": "分院",
+    "commander": "指挥",
+    "kpi": {
+      "activeTasks": "进行中任务",
+      "onTime": "准点率",
+      "conflicts": "待核实冲突",
+      "openCues": "待处理建议"
+    }
+  },
   "cc": {
-    "heading": "指挥官命令中心",
-    "tagline": "六大域 · 带证据的建议 · 人在环"
+    "domainsHeading": "360° 运营状态",
+    "domainsTagline": "六大域 · 实时对象计数",
+    "offline": "无法连接到后端 API（{base}）。请先启动:pnpm --filter @clearview/api dev,并已完成迁移与种子数据。",
+    "retry": "重试"
   },
   "domains": {
     "staff": "员工",
@@ -27,22 +49,138 @@
     "marketing": "营销",
     "equipment": "设备",
     "inventory": "库存",
-    "pending": "待接入真实数据"
+    "status": {
+      "steady": "平稳",
+      "watch": "关注",
+      "action": "行动"
+    },
+    "metrics": {
+      "onDuty": "在岗",
+      "cues": "指挥提示",
+      "activeTasks": "进行中任务",
+      "overdue": "超时",
+      "invoices": "待开账单",
+      "leads": "线索",
+      "campaigns": "活动",
+      "equipment": "设备台数",
+      "lowStock": "低库存项",
+      "items": "库存品类"
+    },
+    "notes": {
+      "staff": "排班均衡,无异常",
+      "patients": "候诊流转顺畅",
+      "financial": "账务无异常",
+      "marketing": "获客渠道稳定",
+      "equipment": "设备状态正常",
+      "inventory": "库存充足"
+    },
+    "noteAction": "{n} 条指挥提示待处理",
+    "noteWatch": "需关注:存在待核实项"
   },
   "cues": {
-    "title": "指挥提示",
-    "empty": "暂无待处理建议 — 骨架已就绪,等待接入真实数据与交叉验证。"
+    "title": "AI 副驾 · 指挥提示",
+    "subtitle": "带证据的建议 · 人在环批准",
+    "empty": "暂无待处理建议 — 通过员工终端上报或上传证据即可驱动循环。",
+    "why": "原因",
+    "confidence": "置信度",
+    "source": "来源智能体",
+    "approve": "批准",
+    "dismiss": "忽略",
+    "snooze": "稍后",
+    "tradeoff": "权衡",
+    "proposed": "建议动作",
+    "priority": {
+      "high": "高优先级",
+      "med": "中优先级",
+      "low": "低优先级"
+    }
   },
-  "storage": {
-    "label": "本地偏好(localStorage 兜底演示)",
-    "note": "即使浏览器禁用存储,应用也不会崩溃(try/catch 兜底)。",
-    "available": "存储可用",
-    "unavailable": "存储不可用 — 已优雅降级,不影响使用",
-    "pick": "选择关注的域:",
-    "saved": "已保存偏好:{value}"
+  "agents": {
+    "patient_flow": "患者流转",
+    "staff": "员工",
+    "inventory": "库存",
+    "equipment": "设备",
+    "financial": "财务",
+    "marketing": "营销"
+  },
+  "ledger": {
+    "title": "交叉验证账本",
+    "subtitle": "声称 → 证据 → 裁定",
+    "empty": "暂无验证记录。",
+    "states": {
+      "verified": "已验证",
+      "pending": "待定",
+      "conflict": "冲突",
+      "unverified": "未验证"
+    },
+    "evidenceKinds": {
+      "qr_scan": "扫码",
+      "snapshot": "快照",
+      "document": "文档",
+      "communication": "沟通",
+      "timing": "时序",
+      "cross_object": "交叉对象"
+    }
+  },
+  "comms": {
+    "title": "实时沟通",
+    "subtitle": "员工上报 · 纳入交叉验证",
+    "listening": "LLM 监听中",
+    "empty": "暂无沟通记录。",
+    "reportTypes": {
+      "clock_in": "上班打卡",
+      "clock_out": "下班打卡",
+      "task_update": "任务更新",
+      "event": "事件",
+      "evidence": "证据",
+      "scan": "扫码"
+    },
+    "annScan": "扫码已作为一等证据纳入验证",
+    "annEvidence": "附件已作为证据链接",
+    "annTask": "任务状态已更新,触发重新核实",
+    "annClock": "考勤已记录",
+    "annDefault": "已纳入交叉验证"
   },
   "footer": {
     "synthetic": "仅使用合成、隐私安全数据 — 不含任何真实患者信息(PHI)。",
-    "sprint": "Clearview OD · Sprint 0 可部署骨架"
+    "sprint": "Clearview OD · 指挥中心(实时接入 · 演示)"
+  },
+  "console": {
+    "title": "员工终端(微信小程序替身)",
+    "subtitle": "以与小程序完全一致的载荷上报 / 上传 / 扫码,驱动实时循环。",
+    "back": "← 返回指挥中心",
+    "subject": "目标对象",
+    "noObjects": "无可选对象(请先运行种子数据)",
+    "reverify": "重新核实所选对象",
+    "refresh": "刷新",
+    "reportCard": "上报事件",
+    "reportHint": "创建一条沟通;勾选后附带对所选对象的扫码,触发交叉验证。",
+    "reportType": "上报类型",
+    "message": "内容",
+    "staffName": "员工姓名(仅开发环境)",
+    "scanSubject": "附带扫码所选对象(作为证据)",
+    "sendReport": "发送上报",
+    "uploadCard": "上传证据",
+    "uploadHint": "上传照片 / 文档,可链接到所选对象并触发重新核实。",
+    "file": "文件",
+    "kind": "类型",
+    "kinds": {
+      "photo": "照片",
+      "screenshot": "截图",
+      "document": "文档",
+      "pdf": "PDF"
+    },
+    "linkUpload": "链接到所选对象",
+    "sendUpload": "上传",
+    "activity": "活动日志",
+    "activityEmpty": "尚无操作。",
+    "report": "上报",
+    "upload": "上传",
+    "verify": "核实",
+    "created": "已创建",
+    "deduped": "幂等去重",
+    "noFile": "请先选择文件。",
+    "loadFailed": "加载对象失败",
+    "devNote": "开发环境:租户经 X-Tenant-Id 传递;生产环境改用 wx.login/openid 会话(S0-3),绝不信任客户端身份。"
   }
 }
