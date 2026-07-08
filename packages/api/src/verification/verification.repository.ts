@@ -50,6 +50,12 @@ export class VerificationRepository {
       const sop = getSopConfig(taskType, {
         requiredEvidence: Array.isArray(props.requiredEvidence) ? (props.requiredEvidence as string[]) : undefined,
         expectedDurationMin: typeof props.expectedDurationMin === 'number' ? props.expectedDurationMin : undefined,
+        // S0-7: per-object overrides for the two calibration knobs (fall back to task defaults).
+        evidenceWeights:
+          props.evidenceWeights && typeof props.evidenceWeights === 'object' && !Array.isArray(props.evidenceWeights)
+            ? (props.evidenceWeights as Record<string, number>)
+            : undefined,
+        baseSelfClaim: typeof props.baseSelfClaim === 'number' ? props.baseSelfClaim : undefined,
       });
 
       const claimPresent = obj.claimed_state != null;
@@ -123,6 +129,9 @@ export class VerificationRepository {
         timingAnomaly,
         crossObjectContradiction,
         threshold: sop.confidenceThreshold,
+        // S0-7: fold the task's per-kind weights and self-claim base into the pure scorer.
+        weights: sop.evidenceWeights,
+        baseSelfClaim: sop.baseSelfClaim,
       };
       const scored = scorer.score(input);
 

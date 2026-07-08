@@ -12,6 +12,18 @@ export interface ScoreInput {
   timingAnomaly: boolean;
   crossObjectContradiction: boolean;
   threshold: number;
+  /**
+   * S0-7: per-evidence-kind multiplier from the task's TaskSopConfig. Each supporting item's
+   * strength is scaled by weights[item.type] (default 1.0 = neutral, pre-S0-7 behavior)
+   * before it is folded into confidence. Contradictions are NOT down-weighted — a conflict
+   * signal must never be softened by a task-specific weight.
+   */
+  weights?: Record<string, number>;
+  /**
+   * S0-7: base confidence for a lone matching self-claim, from TaskSopConfig.baseSelfClaim.
+   * Defaults to BASE_SELF_CLAIM. This is the base-0.50-vs-0.76 lever (see sop-config.ts).
+   */
+  baseSelfClaim?: number;
 }
 
 /** Pluggable scoring seam — an LLM scorer can implement this later for free-text/voice nuance. */
@@ -53,8 +65,18 @@ export class DeterministicScorer implements Scorer {
     const supporting = input.evidence.filter((e) => e.supports);
     const contradicting = input.evidence.filter((e) => !e.supports);
 
-    let confidence = input.claimPresent && input.claimMatchesExpected ? BASE_SELF_CLAIM : 0;
-    for (const e of supporting) confidence = confidence + (1 - confidence) * clamp01(e.strength);
+    // S0-7: per-task base and per-kind weights. Defaults keep the founder-frozen §4 arithmetic.
+    const base = input.baseSelfClaim ?? BASE_SELF_CLAIM;
+    const weightFor = (type: string): number => {
+      const w = input.weights?.[type];
+      return typeof w === 'number' && Number.isFinite(w) ? clamp01(w) : 1;
+    };
+
+    let confidence = input.claimPresent && input.claimMatchesExpected ? clamp01(base) : 0;
+    for (const e of supporting) {
+      const effective = clamp01(e.strength * weightFor(e.type));
+      confidence = confidence + (1 - confidence) * effective;
+    }
     confidence = clamp01(confidence);
 
     const requiredSatisfied = input.requiredMissing.length === 0;
