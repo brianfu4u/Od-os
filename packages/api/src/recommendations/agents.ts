@@ -47,13 +47,15 @@ export class PatientFlowAgent implements DomainAgent {
         severity: 'high',
         impact: 2,
       });
-    } else if (ctx.object.verifiedState === 'pending' && (ctx.alert?.triggered ?? []).includes('missing_required')) {
+    } else if (ctx.object.verifiedState === 'pending' && (ctx.alert?.triggered ?? []).includes('overdue')) {
+      // Soft nudge: a pending task only earns a cue once it is OVERDUE. Plain "required
+      // evidence missing" (no anomaly, not overdue) stays quiet — it is normal in-flight work.
       out.push({
         domain: this.domain,
         sourceAgent: this.domain,
-        title: `${label(ctx)}: pending — required evidence missing`,
-        why: ctx.alert?.reason ?? 'Required evidence not yet attached.',
-        evidence: [{ kind: 'verification', ref: ctx.object.id, note: 'required missing' }],
+        title: `${label(ctx)}: overdue and still pending`,
+        why: ctx.alert?.reason ?? 'Past its due time with required evidence not yet attached.',
+        evidence: [{ kind: 'verification', ref: ctx.object.id, note: 'overdue + required missing' }],
         confidence: ctx.object.confidence ?? 0.5,
         proposedActions: [{ label: 'Request evidence', actionType: 'request_evidence', riskTier: 'low', needsApproval: false }],
         objectId: ctx.object.id,
