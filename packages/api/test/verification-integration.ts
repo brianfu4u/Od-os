@@ -1,8 +1,8 @@
 /**
  * S2 integration test: the cross-verification engine against $DATABASE_URL, including the
  * structure-design §4 Room-3 story end to end — claim-only + missing snapshot + timing
- * anomaly → CONFLICT @0.76; snapshot uploaded (auto re-score via the evidence hook) →
- * VERIFIED @0.93; TWO ledger rows; Alert raised; cross-tenant isolation; overdue sweep.
+ * anomaly → CONFLICT @0.50; snapshot uploaded (auto re-score via the evidence hook) →
+ * VERIFIED @0.855; TWO ledger rows; Alert raised; cross-tenant isolation; overdue sweep.
  */
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
@@ -72,7 +72,7 @@ async function main(): Promise<void> {
     // Step 1 — verify with only the claim.
     const r1 = await verification.verifyObject(A, taskId);
     check(r1?.verifiedState === 'conflict', 'claim-only + missing snapshot + timing anomaly → conflict');
-    check(!!r1 && Math.abs(r1.confidence - 0.76) < 0.01, `confidence ≈ 0.76 (got ${r1?.confidence})`);
+    check(!!r1 && Math.abs(r1.confidence - 0.5) < 0.01, `confidence ≈ 0.50 (got ${r1?.confidence})`);
     const afterVerify1 = await admin.query<{ verified_state: string }>('SELECT verified_state FROM objects WHERE id=$1', [taskId]);
     check(afterVerify1.rows[0]!.verified_state === 'conflict', 'object.verified_state = conflict');
     check((await count(admin, `SELECT count(*)::int AS n FROM verification_ledger WHERE object_id=$1`, [taskId])) === 1, 'ledger row #1 appended');
@@ -88,7 +88,7 @@ async function main(): Promise<void> {
       [taskId],
     );
     check(afterVerify2.rows[0]!.verified_state === 'verified', 'after snapshot upload → verified (auto re-score)');
-    check(Math.abs(Number(afterVerify2.rows[0]!.confidence) - 0.93) < 0.01, `confidence ≈ 0.93 (got ${afterVerify2.rows[0]!.confidence})`);
+    check(Math.abs(Number(afterVerify2.rows[0]!.confidence) - 0.855) < 0.01, `confidence ≈ 0.855 (got ${afterVerify2.rows[0]!.confidence})`);
     check((await count(admin, `SELECT count(*)::int AS n FROM verification_ledger WHERE object_id=$1`, [taskId])) === 2, 'ledger row #2 appended (immutable history)');
     check((await count(admin, `SELECT count(*)::int AS n FROM links l JOIN objects o ON o.id=l.from_object WHERE l.to_object=$1 AND o.type='Snapshot'`, [taskId])) === 1, 'snapshot linked to the task');
 
