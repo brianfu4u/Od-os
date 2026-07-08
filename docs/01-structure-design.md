@@ -63,7 +63,7 @@ Task {
   links: { forVisit, assignedStaff, usesEquipment?, consumesInventory? },
   expectedState: "ready", expectedDurationMin: 6,
   claimedState: "ready", claimedBy: Communication#123, claimedAt: 09:20,
-  verifiedState: "conflict", confidence: 0.76,
+  verifiedState: "conflict", confidence: 0.50,
   requiredEvidence: ["snapshot"],           // 该任务类型必须的证据
   startedAt, dueBy, tags
 }
@@ -155,9 +155,9 @@ clamp → [0,1]
 ```
 09:20 声称:Room#3 = ready(仅沟通)
   核对:必需 snapshot 缺失 + 上位患者 2 分钟前才结账(<6 分 SOP,时间异常)
-  → Verification: Conflict, conf 0.76 → 触发 → Co-Pilot 提示「要求拍照确认」
+  → Verification: Conflict, conf 0.50 → 触发 → Co-Pilot 提示「要求拍照确认」
 09:34 新证据:Lena 上传整理照片
-  → 重新打分:Verified 0.93 → 账本追加一条 → Learn 阶段更新该员工/任务的先验
+  → 重新打分:Verified 0.855 → 账本追加一条 → Learn 阶段更新该员工/任务的先验
 ```
 
 ## 5 · Agentic Loop 与多智能体
