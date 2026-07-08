@@ -1,10 +1,10 @@
 # Clearview OD — WeChat Mini Program API Client Contract
 
-> **Status:** demo-ready (dev auth). The WeChat Mini Program is a **separate front-end
-> workstream** that cannot be built or run in this repo's sandbox — it needs a registered
-> Mini Program **AppID**, WeChat DevTools, and an **ICP-filed** production API domain (China).
-> This document is the contract the Mini Program (and, today, the browser **staff console** at
-> `/[locale]/console`) codes against. Both post the **identical** payloads; only auth differs.
+> **Status:** demo-ready. **Session auth (S0-3) landed** — see §2. The WeChat Mini Program is a
+> **separate front-end workstream** that cannot be built or run in this repo's sandbox — it needs a
+> registered Mini Program **AppID + AppSecret**, WeChat DevTools, and an **ICP-filed** production API
+> domain (China). This document is the contract the Mini Program (and, today, the browser **staff
+> console** at `/[locale]/console`) codes against.
 
 ---
 
@@ -22,30 +22,39 @@ The wire types are the single source of truth in **`@clearview/shared`**
 
 ---
 
-## 2. Authentication & tenancy — **read this first**
+## 2. Authentication & tenancy — **read this first** (S0-3)
 
-The tenant **and** the staff identity are security-critical. They are resolved **differently**
-in dev vs. production, and production must **never** trust the client.
+Both the **tenant** and the **staff/manager identity** come from an **authenticated session**.
+Production **never** trusts a client-supplied identity.
 
-### Dev (today)
-- Tenant travels as the **`X-Tenant-Id`** header (a UUID). For SSE (`EventSource` can't set
-  headers) it may also travel as a **`?tenantId=`** query param.
-- Staff identity is supplied in the report body as `staffHandle` / `staffDisplayName`.
-- This path is **hard-disabled when `NODE_ENV=production`** — the `TenantGuard` throws.
+### How a session is obtained
+- **Staff (WeChat):** `wx.login()` → send `code` to **`POST /auth/staff/wx-login`** → the server does
+  `code2session` → `openid` → looks up the staff's `{tenant, staffId}` and issues a session. (Requires
+  `WX_APPID`/`WX_APPSECRET`; returns **501** until configured — see §7.) An unknown `openid` is **not**
+  auto-registered — a manager/admin registers staff first.
+- **Manager (Web):** manager login → session bound to `{tenant, role, managerId}`. (Prod email
+  magic-link / SSO is a TODO; see §7.)
+- **Dev-gated mock (non-production only, 404 in prod):** `POST /auth/staff/dev-login`
+  `{ tenantId, handle, displayName? }` and `POST /auth/manager/dev-login` `{ tenantId, login, role? }`
+  provision + issue a session for local/CI synthetic data — the mock of the wx.login flow.
 
-> ⚠️ **DEV ONLY.** A client-supplied tenant after only a UUID format check is a cross-tenant
-> leak vector with real data. Fine for synthetic dev data; unacceptable in production.
+### Using a session
+Every data request carries the session as **`Authorization: Bearer <token>`**, the **`cv_session`**
+httpOnly cookie, or — for SSE, which can't set headers — a **`?session=<token>`** query param (a bearer
+credential in the query is fine; a self-reported identity is not). The guard resolves the session and
+sets tenant + staff/manager on the request. `GET /auth/me` returns the resolved identity; `POST /auth/logout`
+revokes the token.
 
-### Production (S0-3 — to build)
-1. Mini Program calls `wx.login()` → gets a `code`.
-2. Client sends `code` to a new endpoint `POST /auth/session` (S0-3).
-3. Server exchanges `code` with WeChat (`jscode2session`) → `openid`, mints a **server session**
-   (httpOnly cookie or bearer token).
-4. **Every** subsequent request derives the **tenant** and the **staff object** from that session.
-   The client cannot choose a tenant or spoof a staff member. `X-Tenant-Id` / `staffHandle` are
-   ignored/rejected.
+### Production vs. dev
+- **Production:** no valid session ⇒ **401**. `X-Tenant-Id` / `staffHandle` / `staffDisplayName` in the
+  header or body are **ignored** — identity is only ever the session's.
+- **Non-production only:** if there is no session, a **dev shim** accepts `X-Tenant-Id` (or `?tenantId=`)
+  + an optional `X-Staff-Handle` (or body `staffHandle`) so the local harness/command-center keep working
+  on synthetic data. A present-but-invalid token is rejected in every environment.
 
-Until S0-3 ships, keep the dev headers behind `NODE_ENV !== 'production'` (already enforced).
+> ⚠️ Ops: the API connects to Postgres as the least-privilege **`clearview_login`** role (member of
+> `clearview_app`, non-superuser, non-BYPASSRLS). Boot **refuses to start** if the DB role can bypass RLS.
+> Set `APP_DATABASE_URL` (a clearview_login connection) in production.
 
 ---
 
@@ -53,8 +62,9 @@ Until S0-3 ships, keep the dev headers behind `NODE_ENV !== 'production'` (alrea
 
 ### 3.1 `POST /reports` — the universal staff report
 Clock-in/out, task updates, events, evidence notes, and **QR scans**. One call creates a
-`Communication`, resolves/provisions the `Staff`, links QR scans as evidence, and (via the
-verification hook) re-verifies any scanned/linked object. **Idempotent** by `clientMessageId`.
+`Communication`, records events, and links QR scans as evidence, and (via the verification hook)
+re-verifies any scanned/linked object. **Idempotent** by `clientMessageId`. **The author is the
+session's staff** — the body's `staffHandle`/`staffDisplayName` are ignored in production.
 
 Request — `StaffReportInput`:
 ```jsonc
@@ -69,9 +79,8 @@ Request — `StaffReportInput`:
   "attachments": [                      // refs only; bytes go through POST /uploads
     { "kind": "image", "objectId": "<snapshot-uuid>", "caption": "turnover photo" }
   ],
-  "at": "2026-07-08T09:20:01Z",
-  "staffHandle": "front_desk",          // DEV ONLY — prod derives Staff from the session
-  "staffDisplayName": "A · Front Desk"  // DEV ONLY
+  "at": "2026-07-08T09:20:01Z"
+  // NOTE: staffHandle/staffDisplayName are legacy dev-shim fields — IGNORED in production.
 }
 ```
 Response — `StaffReportResult`: `{ communicationId, staffId, deduped }`
@@ -84,6 +93,7 @@ Response — `StaffReportResult`: `{ communicationId, staffId, deduped }`
 ### 3.2 `POST /uploads` — evidence bytes (`wx.uploadFile`)
 `multipart/form-data`; the file field **must** be named `file`. Images → `Snapshot`, other →
 `Document`. Optional `linkTo` (subject object id) triggers **auto re-verification** of that object.
+Tenant comes from the session.
 
 | Field | Required | Notes |
 |-------|----------|-------|
@@ -100,7 +110,7 @@ WeChat call shape:
 wx.uploadFile({
   url: `${BASE}/uploads`,
   filePath, name: 'file',
-  header: { /* prod: session cookie/token; dev: 'X-Tenant-Id' */ },
+  header: { Authorization: `Bearer ${sessionToken}` }, // dev: X-Tenant-Id
   formData: { kind: 'photo', linkTo: taskId },
 });
 ```
@@ -119,12 +129,13 @@ through these signed URLs (never a public path). In production the URL points at
 - `POST /objects/:id/verify` — force a re-verification (used by the console; normally implicit).
 
 ### 3.5 Read models (also used by the command center)
-- `GET /overview` — one aggregate: `{ tempo, counts, inventoryLow, ledger[], comms[] }`.
+- `GET /overview` — one aggregate: `{ tempo, counts, inventoryLow, metrics, ledger[], comms[] }`.
 - `GET /recommendations?status=open` — ranked Co-Pilot cues (`RecommendationRecord[]`).
 - `GET /recommendations/tempo` — `OperatingTempo` for the podium.
+- `POST /recommendations/sweep` — run the six-domain sweep (advise-only).
 - `POST /recommendations/:id/{approve|dismiss|snooze}` — **human-in-the-loop**; records intent +
   emits an event. **No world action runs until S4** (approve = intent only).
-- `GET /objects/stream?tenantId=<uuid>` — **SSE** change feed (command center; not the Mini Program).
+- `GET /objects/stream?session=<token>` — **SSE** change feed (dev: `?tenantId=<uuid>`).
 
 ---
 
@@ -147,7 +158,7 @@ conflict — only the actual required evidence does.
 async function postReport(input: StaffReportInput): Promise<StaffReportResult> {
   const res = await request({           // wx.request in the Mini Program; fetch on web
     url: `${BASE}/reports`, method: 'POST',
-    header: authHeader(),               // prod: session; dev: { 'X-Tenant-Id': tenantId }
+    header: { Authorization: `Bearer ${sessionToken}` }, // dev: { 'X-Tenant-Id': tenantId }
     data: input,
   });
   if (res.statusCode >= 400) throw new Error(res.data?.message ?? res.statusCode);
@@ -156,13 +167,16 @@ async function postReport(input: StaffReportInput): Promise<StaffReportResult> {
 ```
 
 ## 6. Errors
-Standard HTTP status + a JSON `{ message }` (NestJS). `400` = bad/missing tenant or invalid body;
-`404` = not found (or not visible under RLS — indistinguishable by design); `401` = the dev header
-path is disabled (production without a session).
+Standard HTTP status + a JSON `{ message }` (NestJS). `400` = bad/missing tenant (dev) or invalid body;
+`401` = no/invalid session (production, or a bad token in any env); `404` = not found (or not visible
+under RLS — indistinguishable by design; also dev-only endpoints in production); `501` = WeChat not configured.
 
 ## 7. Open items / follow-ons
-- **S0-3**: `POST /auth/session` (wx.login→openid→session); bind the provisional Staff to the
-  verified `openid`; stop trusting `X-Tenant-Id`/`staffHandle`.
+- **S0-3 (this ticket): DONE (dev-gated).** Sessions for staff (WeChat) + manager; guard rejects
+  client self-report in production; DB-role hardening + boot self-check. Remaining founder dependencies:
+  **WX_APPID/WX_APPSECRET + ICP filing** for the real wx-login, **manager prod login** (email magic-link/SSO),
+  and wiring the **web UI** to real sessions (dev shim covers dev today).
+- **Session hardening:** store a **hash** of the session token (not the raw token); add refresh/rotation.
 - **QR resolution**: resolve raw scanned `code`s to object ids server-side.
 - **Voice→text**: `voice` attachments transcribed to `claimed_state`/text (deferred S1-5/S0-6).
 - **Production storage**: swap `LocalDiskStorageProvider` → COS/OSS/S3 presigned (StoragePort).
