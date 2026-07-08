@@ -188,6 +188,49 @@ async function seedTenantA(client: Client): Promise<void> {
     ],
     'Snapshot uploaded and matches SOP; re-scored to verified.',
   );
+
+  // ── Six-domain demo objects (S3+): each fires at least one recommendation-sweep cue ──
+  const ago = (min: number): string => new Date(Date.now() - min * 60_000).toISOString();
+  const daysAgo = (d: number): string => new Date(Date.now() - d * 86_400_000).toISOString();
+
+  // Financial: a collected-but-unposted copay ($8,240) + a claim missing its referral.
+  await insObject(client, t, 'Invoice', {
+    properties: { label: 'INV-3007', kind: 'copay', amountCents: 824000 },
+    claimed: 'collected',
+  });
+  await insObject(client, t, 'Claim', {
+    properties: { label: 'CLM-2041', payer: 'VisionCare', missingFields: ['referral'] },
+  });
+
+  // Marketing: a 2★ review past the 60-min response SLA + a web lead unworked > 24h.
+  await insObject(client, t, 'Review', {
+    properties: { label: 'REV-51', rating: 2, source: 'google', text: '等候太久,前台态度冷淡。', at: ago(72) },
+  });
+  await insObject(client, t, 'Lead', {
+    properties: { label: 'LEAD-88', source: 'web', createdAt: ago(30 * 60) },
+  });
+  await insObject(client, t, 'Campaign', {
+    properties: { label: 'Spring Dry-Eye', channel: 'email' },
+  });
+
+  // Equipment: OCT #2 is 31 days past its 30-day calibration window AND was just scanned in use
+  // (→ the stronger "used while overdue" cue); a second device is freshly calibrated.
+  const oct2 = await insObject(client, t, 'Equipment', {
+    properties: { label: 'OCT #2', status: 'ready', lastCalibratedAt: daysAgo(31), calibrationValidDays: 30 },
+  });
+  await insObject(client, t, 'Equipment', {
+    properties: { label: 'Auto-refractor', status: 'ready', lastCalibratedAt: daysAgo(5), calibrationValidDays: 30 },
+  });
+  const octScan = await insObject(client, t, 'Communication', {
+    properties: {
+      channel: 'wecom',
+      author: 'A · Tech',
+      text: 'OCT #2 用于 10:15 检查',
+      at: '10:15',
+      scans: [{ scannedObjectType: 'Equipment', scannedObjectId: oct2, at: ago(20) }],
+    },
+  });
+  await link(client, t, octScan, oct2, 'references');
 }
 
 async function seedTenantB(client: Client): Promise<void> {
