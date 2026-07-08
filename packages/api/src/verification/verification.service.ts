@@ -14,7 +14,11 @@ export class VerificationService {
     @Optional() private readonly bus?: DomainEventBus,
   ) {
     // Event seam (absorbs the deferred S2-Q2 wire): a new claim → auto-verify.
-    this.bus?.on('object.state.claimed', (e) => this.verifyObject(e.tenantId, e.objectId).then(() => undefined));
+    this.bus?.on(
+      'object.state.claimed',
+      (e) => this.verifyObject(e.tenantId, e.objectId).then(() => undefined),
+      'verification.auto-verify',
+    );
   }
 
   /** Re-entrant, idempotent (re)verification of one object. Appends a ledger row each run. */
