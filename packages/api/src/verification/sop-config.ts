@@ -1,35 +1,32 @@
 import type { TaskSopConfig } from '@clearview/shared';
+import { BASE_SELF_CLAIM } from './scorer';
 
 const DEFAULT_THRESHOLD = 0.85;
 
 /**
  * Base confidence for a lone, matching self-claim BEFORE any independent evidence.
  *
- * ── The base-0.50-vs-0.76 decision (raised for the S0-7 clinic freeze) ──
+ * ── The base-0.50-vs-0.76 decision — RESOLVED at the S0-7 clinic freeze: 0.50 ──
  * The engine folds evidence in with diminishing returns: c ← c + (1−c)·strength, starting
  * from this base. So the base is literally "how much do we trust a bare 'I did it' claim
  * with zero independent proof?"
- *   • 0.76 (current): a bare claim already reads as "probably true." A single required
- *     snapshot (strength 0.71) lands at 0.93 — comfortably over the 0.85 threshold. Warm,
- *     but it means an unproven self-report is only one weak signal away from "verified,"
- *     and a lone claim sits well above a coin-flip even when nothing corroborates it.
- *   • 0.50 (proposed): a bare claim is a coin-flip prior — "unproven, equally likely either
- *     way" — which is the honest reading of self-report with no evidence. The SAME snapshot
- *     then lands at 0.855, still clearing 0.85, so §4 Room-3 (conflict → verified once the
- *     snapshot is attached) is preserved; single strong evidence still verifies, but a lone
- *     claim can no longer masquerade as near-certain.
- * Both bases keep every founder-frozen §4 precedence transition intact (verified by the
- * scorer spec). This constant is the single lever; the clinic sets it at the S0-7 freeze,
- * and a task type may override it per-task via TaskSopConfig.baseSelfClaim.
+ *   • 0.76 (rejected): a bare claim already reads as "probably true" and sits one weak signal
+ *     away from verified — too generous for an unproven self-report.
+ *   • 0.50 (CHOSEN): a bare claim is a coin-flip prior — "unproven, equally likely either
+ *     way" — the honest reading of self-report with no evidence. A single required snapshot
+ *     (strength 0.71) still lands at 0.855 ≥ 0.85 → verified, so every founder-frozen §4
+ *     Room-3 transition is preserved (conflict @0.50 → verified @0.855 once the snapshot is
+ *     attached); but a lone claim can no longer masquerade as near-certain — it stays a
+ *     coin-flip (0.50 → pending / low_confidence).
  *
- * DECISION PENDING CLINIC FREEZE — default remains 0.76 until the freeze is signed off so
- * this PR is behavior-preserving; flip to 0.5 (and update the two §4 spec expectations to
- * 0.855/verified) in the freeze commit.
+ * Single source of truth: the effective base is the scorer's BASE_SELF_CLAIM; this constant
+ * mirrors it so config and engine cannot drift. A task type may still override it per-task via
+ * TaskSopConfig.baseSelfClaim.
  */
-export const DEFAULT_BASE_SELF_CLAIM = 0.76;
+export const DEFAULT_BASE_SELF_CLAIM = BASE_SELF_CLAIM;
 
-/** The coin-flip alternative under discussion for the freeze (documented, not yet active). */
-export const COIN_FLIP_BASE_SELF_CLAIM = 0.5;
+/** The coin-flip base an unevidenced claim carries — the chosen default (kept as the semantic name). */
+export const COIN_FLIP_BASE_SELF_CLAIM = BASE_SELF_CLAIM;
 
 /**
  * Default SOP config for the 5 MVP task types. FROZEN with the clinic in S0-7; these are
