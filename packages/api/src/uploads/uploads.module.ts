@@ -13,7 +13,10 @@ import { LocalDiskStorageProvider } from '../storage/local-disk.provider';
   providers: [
     UploadsService,
     UploadsRepository,
-    { provide: STORAGE_PORT, useClass: LocalDiskStorageProvider },
+    // useFactory (not useClass): the provider's constructor takes an optional `baseDir?: string`
+    // it resolves from UPLOAD_DIR itself. useClass would make Nest try to inject that `String`
+    // param and fail to boot; the factory sidesteps DI introspection of the constructor.
+    { provide: STORAGE_PORT, useFactory: () => new LocalDiskStorageProvider() },
   ],
 })
 export class UploadsModule {}
