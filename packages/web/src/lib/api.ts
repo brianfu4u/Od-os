@@ -74,6 +74,11 @@ export function makeApi(tenantId: string = DEV_TENANT_ID) {
       return json(await fetch(`${API_BASE}/recommendations/${id}/${action}`, { method: 'POST', headers: headers(tenantId) }));
     },
 
+    /** Run the six-domain recommendation sweep (advise-only) — lights up every domain's cues. */
+    async sweep(): Promise<{ created: number; ids: string[] }> {
+      return json(await fetch(`${API_BASE}/recommendations/sweep`, { method: 'POST', headers: headers(tenantId) }));
+    },
+
     // ---- staff-console (WeChat Mini Program stand-in) ----
 
     async postReport(input: StaffReportInput): Promise<StaffReportResult> {
