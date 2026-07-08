@@ -14,14 +14,14 @@ const base: ScoreInput = {
 };
 
 describe('DeterministicScorer — Room 3 (§4)', () => {
-  it('claim-only + missing required snapshot + timing anomaly → conflict @ 0.76', () => {
+  it('claim-only + missing required snapshot + timing anomaly → conflict @ 0.50', () => {
     const r = scorer.score({ ...base, requiredMissing: ['snapshot'], timingAnomaly: true });
     expect(r.verifiedState).toBe('conflict');
-    expect(r.confidence).toBeCloseTo(0.76, 2);
+    expect(r.confidence).toBeCloseTo(0.5, 2);
     expect(r.triggered).toContain('conflict');
   });
 
-  it('after the snapshot is attached → verified @ 0.93', () => {
+  it('after the snapshot is attached → verified @ 0.855', () => {
     const r = scorer.score({
       ...base,
       // required snapshot now SATISFIED (requiredMissing empty) → the timing anomaly is
@@ -31,7 +31,7 @@ describe('DeterministicScorer — Room 3 (§4)', () => {
       timingAnomaly: true,
     });
     expect(r.verifiedState).toBe('verified');
-    expect(r.confidence).toBeCloseTo(0.93, 2);
+    expect(r.confidence).toBeCloseTo(0.855, 3);
     expect(r.triggered).toHaveLength(0);
   });
 
@@ -84,14 +84,14 @@ describe('DeterministicScorer — rules', () => {
 });
 
 describe('DeterministicScorer — S0-7 per-task evidenceWeights + baseSelfClaim', () => {
-  it('default (no weights) reproduces the frozen §4 arithmetic: claim + snapshot(0.71) → 0.93', () => {
+  it('default (no weights) reproduces the frozen §4 arithmetic: claim + snapshot(0.71) → 0.855', () => {
     const r = scorer.score({
       ...base,
       evidence: [{ type: 'snapshot', supports: true, strength: 0.71, detail: 'photo' }],
     });
-    // 0.76 + (1-0.76)*0.71 = 0.9304 → 0.93
-    expect(r.confidence).toBeCloseTo(0.93, 2);
-    expect(BASE_SELF_CLAIM).toBe(0.76);
+    // base 0.50 (frozen): 0.50 + (1-0.50)*0.71 = 0.855
+    expect(r.confidence).toBeCloseTo(0.855, 3);
+    expect(BASE_SELF_CLAIM).toBe(0.5);
   });
 
   it('a per-task weight < 1 down-weights that evidence kind (0.5 halves the snapshot signal)', () => {
@@ -100,8 +100,8 @@ describe('DeterministicScorer — S0-7 per-task evidenceWeights + baseSelfClaim'
       evidence: [{ type: 'snapshot', supports: true, strength: 0.71, detail: 'photo' }],
       weights: { snapshot: 0.5 },
     });
-    // effective = 0.71*0.5 = 0.355 → 0.76 + (1-0.76)*0.355 = 0.8452 → 0.845
-    expect(r.confidence).toBeCloseTo(0.845, 3);
+    // effective = 0.71*0.5 = 0.355 → 0.50 + (1-0.50)*0.355 = 0.6775 → 0.678
+    expect(r.confidence).toBeCloseTo(0.678, 3);
   });
 
   it('weight 1.0 is neutral (identical to omitting weights)', () => {
@@ -117,7 +117,7 @@ describe('DeterministicScorer — S0-7 per-task evidenceWeights + baseSelfClaim'
     expect(withW.confidence).toBe(without.confidence);
   });
 
-  it('base 0.50 (coin-flip) still verifies with a single required snapshot: 0.50 → 0.855 ≥ 0.85', () => {
+  it('a single required snapshot verifies from the coin-flip base: 0.50 → 0.855 ≥ 0.85', () => {
     const r = scorer.score({
       ...base,
       evidence: [{ type: 'snapshot', supports: true, strength: 0.71, detail: 'photo' }],
@@ -128,7 +128,7 @@ describe('DeterministicScorer — S0-7 per-task evidenceWeights + baseSelfClaim'
     expect(r.verifiedState).toBe('verified');
   });
 
-  it('base 0.50 lowers a bare claim to a true coin-flip (0.50, below threshold → pending low_confidence)', () => {
+  it('a bare claim is a true coin-flip (0.50, below threshold → pending low_confidence)', () => {
     const r = scorer.score({ ...base, baseSelfClaim: COIN_FLIP_BASE_SELF_CLAIM });
     expect(r.confidence).toBeCloseTo(0.5, 3);
     expect(r.verifiedState).toBe('pending');
