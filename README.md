@@ -251,10 +251,12 @@ an LLM scorer is a pluggable seam behind the same `Scorer` interface.
   document attachments (matched against `requiredEvidence`), corroborating communications,
   SOP **timing** (too-fast vs `expectedDurationMin`), and cross-object consistency — each
   normalized to `{ type, supports, strength, detail }` with a returned breakdown/reason.
-- **Score:** `confidence` starts at 0.76 for a matching self-claim; each independent
-  supporting item raises it toward 1 (diminishing returns). **Required-evidence gate** caps
-  at `pending`; a contradiction (contradicting evidence / cross-object / timing anomaly
-  unbacked by strong evidence) ⇒ `conflict`; else `confidence ≥ threshold` ⇒ `verified`.
+- **Score:** `confidence` starts at 0.50 for a matching self-claim (an unevidenced claim is a
+  coin-flip; the S0-7-frozen base); each independent supporting item raises it toward 1
+  (diminishing returns). Precedence: an explicit contradiction — **or** a timing anomaly while
+  the required evidence is still unsatisfied — ⇒ `conflict` (this **overrides** the
+  required-missing→`pending` cap); required evidence missing with no anomaly ⇒ `pending`;
+  satisfying the required evidence resolves the anomaly, and `confidence ≥ threshold` ⇒ `verified`.
 - **State machine:** `unverified → pending → verified | conflict`, recomputed each run.
 - **Triggers → Alert objects** on conflict / low-confidence / missing-required / overdue.
 - **Writes** (one `withTenant()` tx): update `objects.verified_state` + `confidence`, append
@@ -264,7 +266,7 @@ an LLM scorer is a pluggable seam behind the same `Scorer` interface.
   `POST /verifications/sweep` (time-based triggers).
 
 Reproduces §4 exactly (as a test): Room-3 claim-only + missing snapshot + timing anomaly →
-**conflict @ 0.76**; snapshot uploaded → **verified @ 0.93**, two immutable ledger rows.
+**conflict @ 0.50**; snapshot uploaded → **verified @ 0.855**, two immutable ledger rows.
 
 Out of scope (later): Recommendation/Co-Pilot generation & domain agents (S3), the LLM
 scorer implementation (seam only), and manager action write-backs.
