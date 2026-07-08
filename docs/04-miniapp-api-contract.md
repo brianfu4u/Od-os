@@ -135,7 +135,7 @@ POST /reports (scan)  ─▶ verify ─▶ CONFLICT ─▶ Alert ─▶ agent �
 POST /uploads (photo) ─▶ verify ─▶ VERIFIED  ─▶ ledger row ─▶ SSE ─▶ command center updates live
 ```
 The §4 Room-3 story exactly: a fast "ready" claim with the required snapshot **missing** →
-`conflict @0.76`; once the snapshot is uploaded (requirement satisfied) → `verified @0.93`.
+`conflict @0.50`; once the snapshot is uploaded (requirement satisfied) → `verified @0.855`.
 A strong but **non-required** signal (a QR scan alone) does **not** clear a missing-snapshot
 conflict — only the actual required evidence does.
 
