@@ -115,20 +115,23 @@ export class ActionExecutor {
       return { state: 'not_executable', actionType: action.actionType, riskTier: action.riskTier, actionLogId: logId, targetObjectId: subject.id, createdObjectId: null, undoable: false, note: reason };
     }
 
-    const wb = await handler.execute(ctx);
+    // P2.1 claim-first: compute the plan WITHOUT writing, claim the action_log 'executed' slot
+    // (ON CONFLICT DO NOTHING), and only APPLY the side effects if we won the slot. Symmetric with
+    // undo. A concurrent approve that loses the slot performs NO world write.
+    const plan = await handler.plan(ctx);
     const logId = await this.insertLog(client, tenantId, {
       recommendationId: recommendation.id, actionType: action.actionType, result: 'executed',
-      riskTier: action.riskTier, actor, targetObjectId: wb.targetObjectId ?? null, createdObjectId: wb.createdObjectId ?? null,
-      params: input.params ?? {}, before: wb.before ?? null, after: wb.after ?? null, undoable: handler.undoable, undoOf: null,
+      riskTier: action.riskTier, actor, targetObjectId: plan.targetObjectId ?? null, createdObjectId: plan.createdObjectId ?? null,
+      params: input.params ?? {}, before: plan.before ?? null, after: plan.after ?? null, undoable: handler.undoable, undoOf: null,
     });
-    // Belt-and-suspenders: the executed slot was already taken (only reachable if the caller's
-    // FOR UPDATE guard is bypassed). Don't double-emit; report idempotent.
     if (!logId) {
-      return { state: 'executed', actionType: action.actionType, riskTier: action.riskTier, actionLogId: null, targetObjectId: wb.targetObjectId ?? null, createdObjectId: wb.createdObjectId ?? null, undoable: handler.undoable, note: 'already executed (idempotent)' };
+      // Lost the idempotency race — the slot is already taken. Do NOT apply any side effect.
+      return { state: 'executed', actionType: action.actionType, riskTier: action.riskTier, actionLogId: null, targetObjectId: null, createdObjectId: null, undoable: handler.undoable, note: 'already executed (idempotent)' };
     }
+    await handler.apply(ctx, plan);
     await emitEvent(client, tenantId, recommendation.id, 'action.executed',
-      { actionType: action.actionType, targetObjectId: wb.targetObjectId ?? null, createdObjectId: wb.createdObjectId ?? null, actionLogId: logId }, actor);
-    return { state: 'executed', actionType: action.actionType, riskTier: action.riskTier, actionLogId: logId, targetObjectId: wb.targetObjectId ?? null, createdObjectId: wb.createdObjectId ?? null, undoable: handler.undoable };
+      { actionType: action.actionType, targetObjectId: plan.targetObjectId ?? null, createdObjectId: plan.createdObjectId ?? null, actionLogId: logId }, actor);
+    return { state: 'executed', actionType: action.actionType, riskTier: action.riskTier, actionLogId: logId, targetObjectId: plan.targetObjectId ?? null, createdObjectId: plan.createdObjectId ?? null, undoable: handler.undoable };
   }
 
   /** Reverse the executed write-back for a recommendation (idempotent; restores the before-state). */
