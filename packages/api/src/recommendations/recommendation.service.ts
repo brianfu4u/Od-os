@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException, Optional } from '@nestjs/common';
-import type { OperatingTempo, RecommendationRecord, RecommendationStatus } from '@clearview/shared';
+import type { ActionLogRecord, OperatingTempo, RecommendationRecord, RecommendationStatus } from '@clearview/shared';
 import { RealtimeService } from '../objects/realtime.service';
 import { DomainEventBus } from '../events/domain-event-bus';
+import type { ExecutionOutcome } from '../actions/actions.types';
 import { RecommendationRepository } from './recommendation.repository';
 import { DEFAULT_AGENTS, type DomainAgent } from './agents';
 import { Orchestrator } from './orchestrator';
@@ -61,11 +62,45 @@ export class RecommendationService {
     return this.repo.getFeed(tenantId, status, limit);
   }
 
-  async act(tenantId: string, id: string, status: RecommendationStatus): Promise<RecommendationRecord> {
+  /**
+   * Human-in-the-loop action. `approved` runs the P2/S4 write-back layer (executes a whitelisted
+   * internal action or records intent); `dismissed`/`snoozed` record intent only. `actor` is the
+   * approving manager (audited on every write).
+   */
+  async act(tenantId: string, id: string, status: RecommendationStatus, actor = 'manager'): Promise<RecommendationRecord> {
+    if (status === 'approved') return this.approve(tenantId, id, actor);
     const rec = await this.repo.setStatus(tenantId, id, status);
     if (!rec) throw new NotFoundException('recommendation not found');
     this.realtime.publish({ kind: 'updated', tenantId, objectId: id, type: 'Recommendation', at: new Date().toISOString() });
     return rec;
+  }
+
+  /** Approve a cue and execute its write-back if whitelisted (else record intent). */
+  async approve(tenantId: string, id: string, actor = 'manager'): Promise<RecommendationRecord> {
+    const { record, outcome } = await this.repo.approveAndExecute(tenantId, id, actor);
+    if (!record) throw new NotFoundException('recommendation not found');
+    this.publishOutcome(tenantId, id, outcome);
+    return record;
+  }
+
+  /** Reverse a cue's executed write-back and reopen it. */
+  async undo(tenantId: string, id: string, actor = 'manager'): Promise<RecommendationRecord> {
+    const { record, outcome } = await this.repo.undoAction(tenantId, id, actor);
+    if (!record) throw new NotFoundException('recommendation not found');
+    this.publishOutcome(tenantId, id, outcome);
+    return record;
+  }
+
+  /** The append-only action_log for a cue — what its approval did. */
+  actionLog(tenantId: string, id: string): Promise<ActionLogRecord[]> {
+    return this.repo.getActionLog(tenantId, id);
+  }
+
+  private publishOutcome(tenantId: string, id: string, outcome: ExecutionOutcome | null): void {
+    const at = new Date().toISOString();
+    this.realtime.publish({ kind: 'updated', tenantId, objectId: id, type: 'Recommendation', at });
+    if (outcome?.targetObjectId) this.realtime.publish({ kind: 'updated', tenantId, objectId: outcome.targetObjectId, type: 'Object', at });
+    if (outcome?.createdObjectId) this.realtime.publish({ kind: 'created', tenantId, objectId: outcome.createdObjectId, type: 'Task', at });
   }
 
   tempo(tenantId: string): Promise<OperatingTempo> {
