@@ -7,6 +7,7 @@ import type {
   UpdateObjectInput,
   ObjectQuery,
   CreateLinkInput,
+  ObjectTimeline,
 } from '@clearview/shared';
 import { withTenant } from '../database/tenant-context';
 
@@ -182,6 +183,55 @@ export class ObjectsRepository {
         relation: r.relation,
         createdAt: new Date(r.created_at).toISOString(),
       };
+    });
+  }
+
+  /**
+   * P3 drill-down: one object + its append-only events and verification-ledger rows (the story of
+   * how its verified_state accrued). All read inside withTenant(), so RLS scopes it to the tenant.
+   */
+  async timeline(tenantId: string, id: string): Promise<ObjectTimeline> {
+    return withTenant(tenantId, async (c) => {
+      const objRes = await c.query<ObjectRow>('SELECT * FROM objects WHERE id = $1', [id]);
+      const o = objRes.rows[0];
+      const object = o
+        ? {
+            id: o.id,
+            type: o.type,
+            properties: o.properties ?? {},
+            expectedState: o.expected_state,
+            claimedState: o.claimed_state,
+            verifiedState: o.verified_state,
+            confidence: o.confidence === null ? null : Number(o.confidence),
+          }
+        : null;
+
+      const evRes = await c.query<{ id: string; event_type: string; payload: Record<string, unknown>; actor: string | null; created_at: string }>(
+        `SELECT id, event_type, payload, actor, created_at FROM events WHERE object_id = $1 ORDER BY created_at ASC`,
+        [id],
+      );
+      const events = evRes.rows.map((r) => ({
+        id: r.id,
+        eventType: r.event_type,
+        payload: r.payload ?? {},
+        actor: r.actor ?? null,
+        at: new Date(r.created_at).toISOString(),
+      }));
+
+      const ldRes = await c.query<{ id: string; verified_state: string; confidence: string; evidence: unknown; reason: string | null; created_at: string }>(
+        `SELECT id, verified_state, confidence, evidence, reason, created_at FROM verification_ledger WHERE object_id = $1 ORDER BY created_at ASC`,
+        [id],
+      );
+      const ledger = ldRes.rows.map((r) => ({
+        id: r.id,
+        verifiedState: r.verified_state,
+        confidence: Number(r.confidence),
+        evidence: Array.isArray(r.evidence) ? (r.evidence as Array<{ kind?: string; ref?: string; note?: string }>) : [],
+        reason: r.reason ?? null,
+        at: new Date(r.created_at).toISOString(),
+      }));
+
+      return { object, events, ledger };
     });
   }
 
