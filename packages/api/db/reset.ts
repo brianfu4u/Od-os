@@ -4,11 +4,10 @@
  * Never run this against a database that holds anything you want to keep.
  */
 import { Client } from 'pg';
-import { requireDatabaseUrl } from './env';
+import { clientConfig } from './env';
 
 async function main(): Promise<void> {
-  const connectionString = requireDatabaseUrl();
-  const client = new Client({ connectionString });
+  const client = new Client(clientConfig());
   await client.connect();
   try {
     console.log('⚠ dropping and recreating schema public …');
