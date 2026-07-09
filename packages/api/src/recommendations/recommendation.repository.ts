@@ -2,6 +2,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import type { PoolClient } from 'pg';
 import type {
   ActionLogRecord,
+  LearningFeedbackKind,
   OperatingTempo,
   ProposedAction,
   RankedRecommendation,
@@ -11,6 +12,7 @@ import type {
 import { withTenant } from '../database/tenant-context';
 import { ActionExecutor } from '../actions/action-executor';
 import type { ExecutionOutcome } from '../actions/actions.types';
+import { insertLearningFeedback } from '../learning/learning.sql';
 import type { AgentContext } from './agents';
 
 /** Result of acting on an approval: the updated record + what the write-back did. */
@@ -210,6 +212,10 @@ export class RecommendationRepository {
         `INSERT INTO events (tenant_id, object_id, event_type, payload, actor) VALUES ($1, $2, $3, $4::jsonb, 'manager')`,
         [tenantId, id, `recommendation.${status}`, JSON.stringify({ status })],
       );
+      // P4/S8: dismissed/snoozed are learning signals (a domain repeatedly dismissed → downgraded).
+      if (status === 'dismissed' || status === 'snoozed') {
+        await this.captureFeedback(c, tenantId, id, properties, `recommendation_${status}` as LearningFeedbackKind);
+      }
       return toRecord(id, properties);
     });
   }
@@ -261,6 +267,7 @@ export class RecommendationRepository {
         `INSERT INTO events (tenant_id, object_id, event_type, payload, actor) VALUES ($1, $2, 'recommendation.approved', $3::jsonb, $4)`,
         [tenantId, id, JSON.stringify({ status: 'approved', execution: outcome.state }), actor],
       );
+      await this.captureFeedback(c, tenantId, id, nextProps, 'recommendation_approved');
       return { record: toRecord(id, nextProps), outcome, deduped: false };
     });
   }
@@ -291,6 +298,7 @@ export class RecommendationRepository {
           `INSERT INTO events (tenant_id, object_id, event_type, payload, actor) VALUES ($1, $2, 'recommendation.reopened', $3::jsonb, $4)`,
           [tenantId, id, JSON.stringify({ via: 'undo' }), actor],
         );
+        await this.captureFeedback(c, tenantId, id, nextProps, 'recommendation_undone');
         return { record: toRecord(id, nextProps), outcome, deduped: false };
       }
       return { record: toRecord(id, props), outcome, deduped: true };
@@ -345,6 +353,24 @@ export class RecommendationRepository {
       `INSERT INTO links (tenant_id, from_object, to_object, relation) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
       [tenantId, from, to, relation],
     );
+  }
+
+  /** P4/S8: capture a recommendation-lifecycle feedback signal (append-only), in the same tx. */
+  private async captureFeedback(
+    c: PoolClient,
+    tenantId: string,
+    id: string,
+    props: Record<string, unknown>,
+    kind: LearningFeedbackKind,
+  ): Promise<void> {
+    const actions = Array.isArray(props.actions) ? (props.actions as ProposedAction[]) : [];
+    await insertLearningFeedback(c, tenantId, {
+      kind,
+      domain: typeof props.domain === 'string' ? props.domain : null,
+      actionType: actions[0]?.actionType ?? null,
+      objectId: typeof props.objectId === 'string' ? props.objectId : null,
+      recommendationId: id,
+    });
   }
 }
 

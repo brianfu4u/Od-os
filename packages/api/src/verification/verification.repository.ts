@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { EvidenceItem, EvidenceType, TriggerReason, VerificationResult } from '@clearview/shared';
 import { withTenant } from '../database/tenant-context';
 import { getSopConfig } from './sop-config';
+import { insertLearningFeedback, readLearnedTaskParams } from '../learning/learning.sql';
 import type { Scorer, ScoreInput } from './scorer';
 
 /** Per-type evidence strength in [0,1] (weight × sourceTrust, pre-recency). QR highest. */
@@ -47,15 +48,25 @@ export class VerificationRepository {
       const props = obj.properties ?? {};
 
       const taskType = typeof props.taskType === 'string' ? props.taskType : undefined;
+      // P4/S8 read-back: the effective config layers DEFAULT_SOP < tenant-LEARNED overrides <
+      // per-object overrides (object always wins). Learned weights merge key-by-key with the
+      // defaults so a single tuned kind never wipes the rest.
+      const learned = taskType ? await readLearnedTaskParams(c, taskType) : null;
+      const perObjWeights =
+        props.evidenceWeights && typeof props.evidenceWeights === 'object' && !Array.isArray(props.evidenceWeights)
+          ? (props.evidenceWeights as Record<string, number>)
+          : undefined;
+      const mergedWeights = {
+        ...(getSopConfig(taskType).evidenceWeights ?? {}),
+        ...(learned?.weights ?? {}),
+        ...(perObjWeights ?? {}),
+      };
       const sop = getSopConfig(taskType, {
         requiredEvidence: Array.isArray(props.requiredEvidence) ? (props.requiredEvidence as string[]) : undefined,
         expectedDurationMin: typeof props.expectedDurationMin === 'number' ? props.expectedDurationMin : undefined,
-        // S0-7: per-object overrides for the two calibration knobs (fall back to task defaults).
-        evidenceWeights:
-          props.evidenceWeights && typeof props.evidenceWeights === 'object' && !Array.isArray(props.evidenceWeights)
-            ? (props.evidenceWeights as Record<string, number>)
-            : undefined,
-        baseSelfClaim: typeof props.baseSelfClaim === 'number' ? props.baseSelfClaim : undefined,
+        evidenceWeights: mergedWeights,
+        confidenceThreshold: typeof props.confidenceThreshold === 'number' ? props.confidenceThreshold : learned?.threshold,
+        baseSelfClaim: typeof props.baseSelfClaim === 'number' ? props.baseSelfClaim : learned?.base,
       });
 
       const claimPresent = obj.claimed_state != null;
@@ -191,6 +202,67 @@ export class VerificationRepository {
       }
 
       return { objectId, objectType: obj.type, result, alertId };
+    });
+  }
+
+  /**
+   * P4/S8: a human manually corrects the verdict (e.g. a "conflict" was actually fine, or a
+   * "verified" wasn't really done). Updates the object's verified_state, appends an immutable ledger
+   * row (manual correction), and captures a `verdict_correction` feedback signal carrying the
+   * evidence kinds that were on record — the learner uses the correction direction to tune weights.
+   * Human-in-the-loop + auditable; it does NOT re-run the scorer.
+   */
+  async correctVerdict(
+    tenantId: string,
+    objectId: string,
+    toState: string,
+    reason: string,
+  ): Promise<{ objectId: string; fromState: string | null; toState: string } | null> {
+    return withTenant(tenantId, async (c) => {
+      const objRes = await c.query<{ properties: Record<string, unknown>; verified_state: string | null; confidence: string | null }>(
+        `SELECT properties, verified_state, confidence FROM objects WHERE id = $1`,
+        [objectId],
+      );
+      const obj = objRes.rows[0];
+      if (!obj) return null;
+      const fromState = obj.verified_state;
+      const taskType = typeof obj.properties?.taskType === 'string' ? (obj.properties.taskType as string) : null;
+      const confidence = obj.confidence == null ? 0.5 : Number(obj.confidence);
+
+      // Evidence kinds on record (from the latest ledger row) — the signal context for the learner.
+      const led = await c.query<{ evidence: unknown }>(
+        `SELECT evidence FROM verification_ledger WHERE object_id = $1 ORDER BY created_at DESC LIMIT 1`,
+        [objectId],
+      );
+      const evArr = Array.isArray(led.rows[0]?.evidence) ? (led.rows[0]!.evidence as Array<Record<string, unknown>>) : [];
+      const evidenceKinds = [
+        ...new Set(
+          evArr
+            .map((e) => (typeof e.type === 'string' ? e.type : typeof e.kind === 'string' ? (e.kind as string) : null))
+            .filter((x): x is string => !!x),
+        ),
+      ];
+
+      await c.query(`UPDATE objects SET verified_state = $2 WHERE id = $1`, [objectId, toState]);
+      await c.query(
+        `INSERT INTO verification_ledger (tenant_id, object_id, verified_state, confidence, evidence, reason)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
+        [tenantId, objectId, toState, confidence, JSON.stringify(evArr), `manual correction: ${reason}`],
+      );
+      await c.query(
+        `INSERT INTO events (tenant_id, object_id, event_type, payload, actor) VALUES ($1, $2, 'object.state.corrected', $3::jsonb, 'manager')`,
+        [tenantId, objectId, JSON.stringify({ fromState, toState, reason })],
+      );
+      await insertLearningFeedback(c, tenantId, {
+        kind: 'verdict_correction',
+        taskType,
+        objectId,
+        fromState,
+        toState,
+        evidenceKinds,
+        payload: { reason },
+      });
+      return { objectId, fromState, toState };
     });
   }
 

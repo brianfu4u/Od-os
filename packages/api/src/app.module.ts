@@ -10,6 +10,7 @@ import { UploadsModule } from './uploads/uploads.module';
 import { VerificationModule } from './verification/verification.module';
 import { RecommendationModule } from './recommendations/recommendation.module';
 import { OverviewModule } from './overview/overview.module';
+import { LearningModule } from './learning/learning.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { OverviewModule } from './overview/overview.module';
     ObjectsModule,
     ReportsModule,
     UploadsModule,
+    LearningModule,
     VerificationModule,
     RecommendationModule,
     OverviewModule,

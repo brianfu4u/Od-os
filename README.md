@@ -408,6 +408,40 @@ translated today).
 
 ---
 
+## P4 — learning loop (S8): gets more accurate with use ✔
+
+The moat's "gets better the more you use it" — but **deterministic, explainable, human-in-the-loop**:
+learning only tunes numbers (reversibly, auditably), it never silently acts.
+
+- **Feedback capture (append-only `learning_feedback`, migration 0009):** recommendation
+  **approved / dismissed / snoozed / undone** (from the P2/P3 flow) and manual **verdict corrections**
+  (`POST /verifications/correct` — updates the object + ledger and records the correction with the
+  evidence kinds on record). Append-only like `events`/`verification_ledger` (trigger + withheld
+  UPDATE/DELETE), RLS-forced.
+- **Deterministic learner (`POST /learning/run`, per tenant, repeatable):** aggregates feedback and
+  makes **bounded** moves toward a target:
+  - a domain whose cues are mostly **ignored** accrues a priority **downgrade** penalty;
+  - an evidence kind that repeatedly correlates with real completion (verdict corrected → *verified*
+    with that evidence present) has its **weight raised** (and lowered when it correlates with
+    non-completion);
+  - the per-task **threshold** nudges from correction direction.
+  Every change is ≤ one step, clamped to min/max, and gated by `minSample` (low sample ⇒ no change) —
+  a few anomalies can't swing a parameter. Each run appends a readable **`learning_audit`** record
+  (what changed, the basis, before/after) and is **reversible** (`POST /learning/rollback`).
+- **Closed loop:** S2 (`verify`) reads the learned per-task weights/threshold back — layered
+  `DEFAULT_SOP < tenant-learned < per-object` — and S3 (orchestrator) subtracts the learned domain
+  penalty from a cue's rank score. (The scorer's per-kind multiplier now allows >1 so learned
+  up-weighting actually raises confidence; a single item is still capped at a full-strength signal.)
+- **Params live in a mutable per-tenant `learning_params` table**; the two ledgers are immutable.
+
+Tested (unit + integration): feedback append-only + tenant-isolated; ignored domain → downgrade;
+evidence → weight up (never past max); low sample → no change; **S2 confidence rises** after a learned
+up-weight; **S3 reads the penalty back**; rollback restores the prior params; deterministic (same
+input → same output). **TODO(later):** LLM scorer / generative re-ranking; cross-store anonymized
+benchmarks (needs multi-tenant aggregation + compliance); real external integrations; deployment.
+
+---
+
 ## Ground rules
 
 - **Multi-tenant from day one** — `tenant_id` + RLS on every data table.
