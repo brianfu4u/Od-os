@@ -4,6 +4,7 @@ import { ReportsRepository } from './reports.repository';
 import { RealtimeService } from '../objects/realtime.service';
 import { VERIFICATION_HOOK, type VerificationHook } from '../verification/verification.hook';
 import { validateReportInput } from './reports.validation';
+import type { SessionIdentity } from '../auth/session.types';
 
 @Injectable()
 export class ReportsService {
@@ -13,11 +14,11 @@ export class ReportsService {
     @Optional() @Inject(VERIFICATION_HOOK) private readonly verification?: VerificationHook,
   ) {}
 
-  async ingest(tenantId: string, input: StaffReportInput): Promise<StaffReportResult> {
+  async ingest(tenantId: string, input: StaffReportInput, identity: SessionIdentity): Promise<StaffReportResult> {
     const error = validateReportInput(input);
     if (error) throw new BadRequestException(error);
 
-    const result = await this.repo.ingest(tenantId, input);
+    const result = await this.repo.ingest(tenantId, input, identity);
     if (!result.deduped) {
       this.realtime.publish({
         kind: 'created',

@@ -1,15 +1,16 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import type { StaffReportInput } from '@clearview/shared';
 import { TenantGuard } from '../tenant/tenant.guard';
-import { TenantId } from '../tenant/tenant.decorator';
+import { TenantId, AuthIdentity } from '../tenant/tenant.decorator';
+import type { SessionIdentity } from '../auth/session.types';
 import { ReportsService } from './reports.service';
 
 /**
- * Inbound staff reports from the WeChat Mini Program (and, for now, the dev harness).
+ * Inbound staff reports from the WeChat Mini Program (and, in dev, the harness).
  *
- * Auth today reuses the DEV-ONLY tenant guard (X-Tenant-Id, disabled in production).
- * TODO(S0-3): the tenant AND the staff identity must come from the wx.login/openid
- * session — neither may be trusted from the client in production.
+ * S0-3: TenantGuard resolves BOTH tenant and staff identity from the authenticated session.
+ * In production the request body's `staffHandle`/`staffDisplayName` are ignored — the author is
+ * the session's staff. In non-production the dev shim supplies the identity for local testing.
  */
 @UseGuards(TenantGuard)
 @Controller('reports')
@@ -17,7 +18,7 @@ export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 
   @Post()
-  ingest(@TenantId() tenantId: string, @Body() body: StaffReportInput) {
-    return this.reports.ingest(tenantId, body);
+  ingest(@TenantId() tenantId: string, @AuthIdentity() identity: SessionIdentity, @Body() body: StaffReportInput) {
+    return this.reports.ingest(tenantId, body, identity);
   }
 }
