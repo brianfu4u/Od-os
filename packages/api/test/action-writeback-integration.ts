@@ -145,6 +145,22 @@ async function main(): Promise<void> {
     await service.undo(A, recReassign, 'mgr-1');
     check((await scalar(admin, `SELECT properties->>'assignedTo' AS v FROM objects WHERE id=$1`, [taskId])) === null, 'undo removed assignedTo (restored prior state)');
 
+    // ── 5c) CONCURRENCY (P2.1): two parallel approves of one cue → exactly one execution ──
+    const raceItem = await insObj(A, 'InventoryItem', { name: 'Saline', sku: 'SAL-1', onHand: 0, reorderPoint: 4 });
+    const raceRec = await insRec(A, raceItem, [low('inventory_reorder')]);
+    await Promise.all([
+      service.approve(A, raceRec, 'mgr-1').catch(() => undefined),
+      service.approve(A, raceRec, 'mgr-1').catch(() => undefined),
+    ]);
+    check(
+      (await count(admin, `SELECT count(*)::text AS n FROM action_log WHERE tenant_id=$1 AND recommendation_id=$2 AND result='executed'`, [A, raceRec])) === 1,
+      'concurrent approves → exactly one executed action_log row (claim-first idempotency)',
+    );
+    check(
+      (await count(admin, `SELECT count(*)::text AS n FROM objects WHERE tenant_id=$1 AND type='Task' AND properties->>'forItem'=$2 AND (properties->>'archived') IS DISTINCT FROM 'true'`, [A, raceItem])) === 1,
+      'concurrent approves → exactly one Task created (no double side effect)',
+    );
+
     // ── 6) ACTION_LOG is APPEND-ONLY ──
     await expectThrow(
       () => admin.query(`UPDATE action_log SET actor='tamper' WHERE recommendation_id=$1`, [recReorder]),

@@ -82,7 +82,8 @@
       "inventory": "在庫は十分"
     },
     "noteAction": "{n} 件の提案が未処理",
-    "noteWatch": "要注意:未確認項目あり"
+    "noteWatch": "要注意:未確認項目あり",
+    "drilldown": "詳細"
   },
   "cues": {
     "title": "AI 副操縦士 · 提案",
@@ -100,7 +101,9 @@
       "high": "高優先度",
       "med": "中優先度",
       "low": "低優先度"
-    }
+    },
+    "recent": "最近の操作",
+    "undo": "元に戻す"
   },
   "agents": {
     "patient_flow": "患者フロー",
@@ -200,5 +203,50 @@
     "noFile": "先にファイルを選択してください。",
     "loadFailed": "オブジェクトの読み込みに失敗",
     "devNote": "開発環境:テナントは X-Tenant-Id で伝達。本番は wx.login/openid セッション(S0-3)を用い、クライアント提供の識別情報は信頼しません。"
+  },
+  "login": {
+    "title": "管理者ログイン",
+    "subtitle": "サインインして指揮センターへ(開発環境はモックログイン)。",
+    "tenant": "クリニック(テナント)",
+    "name": "表示名",
+    "signIn": "サインイン",
+    "signingIn": "サインイン中…",
+    "devNote": "開発:P1 セッションのモック管理者ログイン(dev-gated、本番は404)。セッションがテナントを決定し、リクエストは Bearer、SSE は ?session= を使用。本番はメールのマジックリンク/SSO。",
+    "storageWarning": "ローカルストレージが利用できません:ログイン状態は保持されません(動作は継続します)。"
+  },
+  "shell": {
+    "tag": "管理者",
+    "manager": "マネージャー",
+    "signOut": "サインアウト",
+    "loading": "読み込み中…",
+    "storageOff": "ストレージ無効"
+  },
+  "results": {
+    "executed": "実行済み",
+    "blocked_high_risk": "ブロック(高リスク・未実行)",
+    "recorded_intent": "意図のみ記録",
+    "not_executable": "実行不可",
+    "undone": "取り消し済み"
+  },
+  "verify": {
+    "verified": "検証済み",
+    "conflict": "矛盾",
+    "pending": "保留中",
+    "unverified": "未検証"
+  },
+  "domainPage": {
+    "counts": "{objects} オブジェクト · {alerts} アラート · {cues} 提案",
+    "back": "指揮センターへ戻る",
+    "objects": "オブジェクトとタスク",
+    "alerts": "アラート",
+    "cues": "このドメインの提案",
+    "noCues": "このドメインに未処理の提案はありません",
+    "empty": "データがありません",
+    "timeline": "タイムライン",
+    "timelineTitle": "オブジェクトのタイムライン",
+    "timelineHint": "オブジェクトの「タイムライン」を選ぶと検証の履歴が見られます。",
+    "selectPrompt": "オブジェクトを選ぶとイベントと検証台帳が表示されます。",
+    "ledger": "検証台帳",
+    "events": "イベント"
   }
 }

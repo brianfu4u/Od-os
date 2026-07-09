@@ -1,6 +1,7 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
 import type { DomainStatus, DomainVM } from '../../lib/domain-model';
 
 const STATUS_STYLE: Record<DomainStatus, string> = {
@@ -11,6 +12,7 @@ const STATUS_STYLE: Record<DomainStatus, string> = {
 
 export function DomainGrid({ tiles }: { tiles: DomainVM[] }) {
   const t = useTranslations();
+  const locale = useLocale();
   return (
     <section aria-label={t('cc.domainsHeading')}>
       <h2 className="text-sm font-semibold text-slate-200">{t('cc.domainsHeading')}</h2>
@@ -24,9 +26,10 @@ export function DomainGrid({ tiles }: { tiles: DomainVM[] }) {
                 ? t('domains.noteWatch')
                 : t(`domains.notes.${tile.key}`);
           return (
-            <article
+            <Link
               key={tile.key}
-              className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-colors hover:border-slate-700"
+              href={`/${locale}/domain/${tile.key}`}
+              className="group block rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-colors hover:border-sky-600/60 hover:bg-slate-900"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -47,13 +50,18 @@ export function DomainGrid({ tiles }: { tiles: DomainVM[] }) {
                   </div>
                 ))}
               </div>
-              <p className="mt-3 flex items-center gap-1.5 text-[11px] text-slate-400">
-                <span className="text-sky-400" aria-hidden>
-                  ✦
+              <p className="mt-3 flex items-center justify-between gap-1.5 text-[11px] text-slate-400">
+                <span className="flex items-center gap-1.5">
+                  <span className="text-sky-400" aria-hidden>
+                    ✦
+                  </span>
+                  {note}
                 </span>
-                {note}
+                <span className="text-sky-400/70 transition-transform group-hover:translate-x-0.5" aria-hidden>
+                  {t('domains.drilldown')} →
+                </span>
               </p>
-            </article>
+            </Link>
           );
         })}
       </div>

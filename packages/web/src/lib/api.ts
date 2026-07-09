@@ -1,11 +1,15 @@
 /**
  * Typed browser client for the Clearview OD API.
  *
- * Auth is DEV-ONLY: the tenant travels as the `X-Tenant-Id` header (and as a `tenantId`
- * query param for SSE, which cannot set headers). Production replaces both with a
- * wx.login/openid-derived session (S0-3); nothing here should trust a client tenant then.
+ * Auth (P3): the command center signs in via a P1 manager session and sends the token as
+ * `Authorization: Bearer` (and `?session=` for SSE, which can't set headers) — the SESSION drives
+ * the tenant, so nothing here self-reports a tenant. A dev fallback (`{ tenantId }`, or a bare
+ * tenantId string) still sends the non-production `X-Tenant-Id` shim so the staff-console harness
+ * keeps working locally; production ignores it.
  */
 import type {
+  ActionLogRecord,
+  ObjectTimeline,
   OverviewResult,
   RecommendationRecord,
   RecommendationStatus,
@@ -27,15 +31,22 @@ export class ApiError extends Error {
   }
 }
 
-function headers(tenantId: string, extra?: Record<string, string>): Record<string, string> {
-  return { 'X-Tenant-Id': tenantId, ...(extra ?? {}) };
+export interface ApiAuth {
+  token?: string;
+  tenantId?: string;
+}
+
+function normalize(auth?: string | ApiAuth): ApiAuth {
+  if (auth === undefined) return { tenantId: DEV_TENANT_ID };
+  if (typeof auth === 'string') return { tenantId: auth };
+  return auth;
 }
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let detail = res.statusText;
     try {
-      const body = (await res.json()) as { message?: string };
+      const body = (await res.json()) as { message?: string | string[] };
       if (body?.message) detail = Array.isArray(body.message) ? body.message.join(', ') : body.message;
     } catch {
       /* non-JSON error body */
@@ -45,47 +56,81 @@ async function json<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-export function makeApi(tenantId: string = DEV_TENANT_ID) {
+export function makeApi(auth?: string | ApiAuth) {
+  const a = normalize(auth);
+  const authHeaders = (extra?: Record<string, string>): Record<string, string> => ({
+    ...(a.token ? { Authorization: `Bearer ${a.token}` } : {}),
+    ...(!a.token && a.tenantId ? { 'X-Tenant-Id': a.tenantId } : {}),
+    ...(extra ?? {}),
+  });
+
   return {
-    tenantId,
+    auth: a,
     base: API_BASE,
 
-    /** SSE endpoint — EventSource carries the tenant as a query param (no custom headers). */
+    /** SSE endpoint — EventSource carries the session (or dev tenant) as a query param. */
     streamUrl(): string {
-      return `${API_BASE}/objects/stream?tenantId=${encodeURIComponent(tenantId)}`;
+      const q = a.token
+        ? `session=${encodeURIComponent(a.token)}`
+        : `tenantId=${encodeURIComponent(a.tenantId ?? DEV_TENANT_ID)}`;
+      return `${API_BASE}/objects/stream?${q}`;
     },
 
     async overview(signal?: AbortSignal): Promise<OverviewResult> {
-      return json(await fetch(`${API_BASE}/overview`, { headers: headers(tenantId), signal }));
+      return json(await fetch(`${API_BASE}/overview`, { headers: authHeaders(), signal }));
     },
 
     async recommendations(status: RecommendationStatus = 'open', signal?: AbortSignal): Promise<RecommendationRecord[]> {
       return json(
-        await fetch(`${API_BASE}/recommendations?status=${status}`, { headers: headers(tenantId), signal }),
+        await fetch(`${API_BASE}/recommendations?status=${status}&limit=50`, { headers: authHeaders(), signal }),
       );
     },
 
     async tempo(signal?: AbortSignal): Promise<OperatingTempo> {
-      return json(await fetch(`${API_BASE}/recommendations/tempo`, { headers: headers(tenantId), signal }));
+      return json(await fetch(`${API_BASE}/recommendations/tempo`, { headers: authHeaders(), signal }));
     },
 
-    /** Human-in-the-loop: records intent + emits an event. No world write until S4. */
-    async act(id: string, action: 'approve' | 'dismiss' | 'snooze'): Promise<RecommendationRecord> {
-      return json(await fetch(`${API_BASE}/recommendations/${id}/${action}`, { method: 'POST', headers: headers(tenantId) }));
+    /** Approve → runs the P2/S4 write-back layer; returns the updated record incl. execution state. */
+    async approve(id: string): Promise<RecommendationRecord> {
+      return json(await fetch(`${API_BASE}/recommendations/${id}/approve`, { method: 'POST', headers: authHeaders() }));
+    },
+
+    /** Undo a previously executed write-back and reopen the cue. */
+    async undo(id: string): Promise<RecommendationRecord> {
+      return json(await fetch(`${API_BASE}/recommendations/${id}/undo`, { method: 'POST', headers: authHeaders() }));
+    },
+
+    async act(id: string, action: 'dismiss' | 'snooze'): Promise<RecommendationRecord> {
+      return json(await fetch(`${API_BASE}/recommendations/${id}/${action}`, { method: 'POST', headers: authHeaders() }));
+    },
+
+    /** The append-only action_log for a cue (what its approval did). */
+    async actionLog(id: string, signal?: AbortSignal): Promise<ActionLogRecord[]> {
+      return json(await fetch(`${API_BASE}/recommendations/${id}/actions`, { headers: authHeaders(), signal }));
     },
 
     /** Run the six-domain recommendation sweep (advise-only) — lights up every domain's cues. */
     async sweep(): Promise<{ created: number; ids: string[] }> {
-      return json(await fetch(`${API_BASE}/recommendations/sweep`, { method: 'POST', headers: headers(tenantId) }));
+      return json(await fetch(`${API_BASE}/recommendations/sweep`, { method: 'POST', headers: authHeaders() }));
     },
 
-    // ---- staff-console (WeChat Mini Program stand-in) ----
+    async objects(type?: string, signal?: AbortSignal): Promise<Array<Record<string, unknown>>> {
+      const q = type ? `?type=${encodeURIComponent(type)}` : '';
+      return json(await fetch(`${API_BASE}/objects${q}`, { headers: authHeaders(), signal }));
+    },
+
+    /** P3 drill-down: an object's full story (object + events + verification ledger). */
+    async timeline(objectId: string, signal?: AbortSignal): Promise<ObjectTimeline> {
+      return json(await fetch(`${API_BASE}/objects/${objectId}/timeline`, { headers: authHeaders(), signal }));
+    },
+
+    // ---- staff-console (WeChat Mini Program stand-in; dev tenant shim) ----
 
     async postReport(input: StaffReportInput): Promise<StaffReportResult> {
       return json(
         await fetch(`${API_BASE}/reports`, {
           method: 'POST',
-          headers: headers(tenantId, { 'Content-Type': 'application/json' }),
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify(input),
         }),
       );
@@ -96,17 +141,11 @@ export function makeApi(tenantId: string = DEV_TENANT_ID) {
       form.append('file', file);
       if (opts?.linkTo) form.append('linkTo', opts.linkTo);
       if (opts?.kind) form.append('kind', opts.kind);
-      return json(await fetch(`${API_BASE}/uploads`, { method: 'POST', headers: headers(tenantId), body: form }));
+      return json(await fetch(`${API_BASE}/uploads`, { method: 'POST', headers: authHeaders(), body: form }));
     },
 
-    /** Force a re-verification of one object (drives the loop in the demo). */
     async verify(objectId: string): Promise<VerificationResult> {
-      return json(await fetch(`${API_BASE}/objects/${objectId}/verify`, { method: 'POST', headers: headers(tenantId) }));
-    },
-
-    async objects(type?: string, signal?: AbortSignal): Promise<Array<Record<string, unknown>>> {
-      const q = type ? `?type=${encodeURIComponent(type)}` : '';
-      return json(await fetch(`${API_BASE}/objects${q}`, { headers: headers(tenantId), signal }));
+      return json(await fetch(`${API_BASE}/objects/${objectId}/verify`, { method: 'POST', headers: authHeaders() }));
     },
   };
 }

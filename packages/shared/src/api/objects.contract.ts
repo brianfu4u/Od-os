@@ -47,3 +47,40 @@ export interface ObjectChangeEvent {
   /** ISO-8601 timestamp. */
   at: string;
 }
+
+/** One append-only event row for an object's timeline (GET /objects/:id/timeline). */
+export interface TimelineEvent {
+  id: string;
+  eventType: string;
+  payload: Record<string, unknown>;
+  actor?: string | null;
+  at: string;
+}
+
+/** One verification_ledger row for an object's timeline (the truth accruing over time). */
+export interface TimelineLedgerRow {
+  id: string;
+  verifiedState: string;
+  confidence: number;
+  evidence: Array<{ kind?: string; ref?: string; note?: string }>;
+  reason?: string | null;
+  at: string;
+}
+
+/**
+ * P3 drill-down: the full story for one object — its current state + the append-only events and
+ * verification-ledger rows about it (e.g. the Room-3 conflict → verified narrative). Tenant-scoped.
+ */
+export interface ObjectTimeline {
+  object: {
+    id: string;
+    type: string;
+    properties: Record<string, unknown>;
+    expectedState: string | null;
+    claimedState: string | null;
+    verifiedState: string | null;
+    confidence: number | null;
+  } | null;
+  events: TimelineEvent[];
+  ledger: TimelineLedgerRow[];
+}

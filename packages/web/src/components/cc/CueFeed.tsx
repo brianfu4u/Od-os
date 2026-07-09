@@ -2,10 +2,8 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import type { RecommendationRecord } from '@clearview/shared';
+import type { ActionResult, RecommendationRecord } from '@clearview/shared';
 import { pct } from '../../lib/format';
-
-type Action = 'approve' | 'dismiss' | 'snooze';
 
 function priority(rank: number): 'high' | 'med' | 'low' {
   if (rank <= 1) return 'high';
@@ -19,20 +17,36 @@ const PRIORITY_STYLE: Record<'high' | 'med' | 'low', string> = {
   low: 'bg-slate-700/60 text-slate-300',
 };
 
+const RESULT_STYLE: Record<ActionResult, string> = {
+  executed: 'bg-emerald-500/20 text-emerald-300',
+  blocked_high_risk: 'bg-rose-500/20 text-rose-300',
+  recorded_intent: 'bg-slate-700/60 text-slate-300',
+  not_executable: 'bg-amber-500/20 text-amber-300',
+  undone: 'bg-sky-500/20 text-sky-300',
+};
+
 export function CueFeed({
   recs,
-  onAct,
+  results,
+  onApprove,
+  onUndo,
+  onDismiss,
+  onSnooze,
 }: {
   recs: RecommendationRecord[];
-  onAct: (id: string, action: Action) => Promise<void>;
+  results: RecommendationRecord[];
+  onApprove: (id: string) => Promise<void>;
+  onUndo: (id: string) => Promise<void>;
+  onDismiss: (id: string) => Promise<void>;
+  onSnooze: (id: string) => Promise<void>;
 }) {
   const t = useTranslations();
   const [busy, setBusy] = useState<string | null>(null);
 
-  async function run(id: string, action: Action): Promise<void> {
+  async function run(id: string, fn: () => Promise<void>): Promise<void> {
     setBusy(id);
     try {
-      await onAct(id, action);
+      await fn();
     } finally {
       setBusy(null);
     }
@@ -46,7 +60,44 @@ export function CueFeed({
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
-        {recs.length === 0 ? (
+        {/* Recently acted — the outcome of an approval (P2/S4), with undo for reversible executions. */}
+        {results.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">{t('cues.recent')}</p>
+            {results.map((r) => {
+              const state = (r.execution?.state ?? 'recorded_intent') as ActionResult;
+              return (
+                <div key={r.id} className="rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs font-medium text-slate-200">{r.title}</p>
+                    <span className={['shrink-0 rounded-full px-2 py-0.5 text-[10px]', RESULT_STYLE[state]].join(' ')}>
+                      {t(`results.${state}`)}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-slate-500">
+                      {r.execution?.actionType ? (
+                        <code className="rounded bg-slate-800 px-1 py-0.5 text-slate-300">{r.execution.actionType}</code>
+                      ) : null}
+                    </span>
+                    {state === 'executed' && r.execution?.undoable ? (
+                      <button
+                        type="button"
+                        disabled={busy === r.id}
+                        onClick={() => void run(r.id, () => onUndo(r.id))}
+                        className="rounded-md border border-sky-500/40 px-2 py-0.5 text-[11px] text-sky-300 transition-colors hover:bg-sky-500/10 disabled:opacity-50"
+                      >
+                        {t('cues.undo')}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {recs.length === 0 && results.length === 0 ? (
           <p className="rounded-lg border border-dashed border-slate-800 p-6 text-center text-sm text-slate-500">
             {t('cues.empty')}
           </p>
@@ -88,7 +139,6 @@ export function CueFeed({
                   </p>
                 ) : null}
 
-                {/* confidence */}
                 <div className="mt-3">
                   <div className="flex items-center justify-between text-[10px] text-slate-500">
                     <span>{t('cues.confidence')}</span>
@@ -107,7 +157,7 @@ export function CueFeed({
                   <button
                     type="button"
                     disabled={busy === r.id}
-                    onClick={() => void run(r.id, 'approve')}
+                    onClick={() => void run(r.id, () => onApprove(r.id))}
                     className="rounded-lg bg-sky-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-sky-400 disabled:opacity-50"
                   >
                     {t('cues.approve')}
@@ -115,7 +165,7 @@ export function CueFeed({
                   <button
                     type="button"
                     disabled={busy === r.id}
-                    onClick={() => void run(r.id, 'snooze')}
+                    onClick={() => void run(r.id, () => onSnooze(r.id))}
                     className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:border-slate-500 disabled:opacity-50"
                   >
                     {t('cues.snooze')}
@@ -123,7 +173,7 @@ export function CueFeed({
                   <button
                     type="button"
                     disabled={busy === r.id}
-                    onClick={() => void run(r.id, 'dismiss')}
+                    onClick={() => void run(r.id, () => onDismiss(r.id))}
                     className="rounded-lg px-3 py-1.5 text-xs text-slate-400 transition-colors hover:text-slate-200 disabled:opacity-50"
                   >
                     {t('cues.dismiss')}

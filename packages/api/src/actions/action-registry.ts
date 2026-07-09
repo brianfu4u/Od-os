@@ -1,4 +1,5 @@
-import type { ActionContext, ActionHandler, ActionSubject, WritebackResult } from './actions.types';
+import { randomUUID } from 'node:crypto';
+import type { ActionContext, ActionHandler, ActionSubject, WritebackPlan } from './actions.types';
 import { addLink, archiveObject, emitEvent, insertObject, patchProps, restoreProps } from './actions.sql';
 
 /**
@@ -6,6 +7,11 @@ import { addLink, archiveObject, emitEvent, insertObject, patchProps, restorePro
  * ever runs one of these — each creates/patches objects WITHIN the tenant and has NO external side
  * effect (no messaging, no real ordering, no payment). High-risk actions are never registered here,
  * so they can never be auto-executed. Every handler is undoable.
+ *
+ * P2.1: each handler is split into `plan` (pure — computes before/after and pre-generates any new
+ * object id, WITHOUT writing) and `apply` (does the writes). The executor records the plan into the
+ * action_log slot first and only calls `apply` if it wins the slot, so claiming idempotency and
+ * performing the side effect are ordered (claim-first), symmetric with undo.
  *
  * The keys are the canonical `actionType` values the domain agents emit for these cues.
  */
@@ -24,26 +30,22 @@ const inventoryReorder: ActionHandler = {
   undoable: true,
   describe: (s: ActionSubject) => `Create reorder task for ${str(s.properties, 'name') ?? s.id}`,
   canExecute: () => null,
-  async execute(ctx: ActionContext): Promise<WritebackResult> {
+  async plan(): Promise<WritebackPlan> {
+    const taskId = randomUUID();
+    return { createdObjectId: taskId, targetObjectId: null, before: null, after: { createdTaskId: taskId, taskType: 'inventory_reorder' } };
+  },
+  async apply(ctx, plan) {
     const p = ctx.subject.properties;
     const name = str(p, 'name') ?? str(p, 'sku') ?? 'item';
-    const taskId = await insertObject(
+    await insertObject(
       ctx.client,
       ctx.tenantId,
       'Task',
-      {
-        taskType: 'inventory_reorder',
-        label: `Reorder ${name}`,
-        requiredEvidence: ['document'],
-        forItem: ctx.subject.id,
-        sku: str(p, 'sku') ?? null,
-        createdByAction: 'inventory_reorder',
-      },
+      { taskType: 'inventory_reorder', label: `Reorder ${name}`, requiredEvidence: ['document'], forItem: ctx.subject.id, sku: str(p, 'sku') ?? null, createdByAction: 'inventory_reorder' },
       ctx.actor,
-      { expected: 'ordered' },
+      { expected: 'ordered', id: plan.createdObjectId ?? undefined },
     );
-    await addLink(ctx.client, ctx.tenantId, taskId, ctx.subject.id, 'consumes');
-    return { createdObjectId: taskId, targetObjectId: null, before: null, after: { createdTaskId: taskId, taskType: 'inventory_reorder' } };
+    await addLink(ctx.client, ctx.tenantId, plan.createdObjectId!, ctx.subject.id, 'consumes');
   },
   async undo(ctx, log) {
     // Undo a pure create = archive the task the action created.
@@ -61,16 +63,16 @@ const reassignTask: ActionHandler = {
   undoable: true,
   describe: (s: ActionSubject) => `Reassign ${str(s.properties, 'label') ?? s.id}`,
   canExecute: (ctx: ActionContext) => (reassignTarget(ctx) ? null : 'no reassign target (params.to / properties.reassignTo)'),
-  async execute(ctx: ActionContext): Promise<WritebackResult> {
+  async plan(ctx): Promise<WritebackPlan> {
     const to = reassignTarget(ctx)!;
-    const patched = await patchProps(ctx.client, ctx.subject.id, { assignedTo: to });
+    const prev = ctx.subject.properties.assignedTo;
+    // Absent recorded as null (JSON.stringify would drop undefined) → undo deletes the key.
+    return { targetObjectId: ctx.subject.id, createdObjectId: null, before: { assignedTo: prev === undefined ? null : prev }, after: { assignedTo: to } };
+  },
+  async apply(ctx, plan) {
+    const to = (plan.after as { assignedTo: string }).assignedTo;
+    await patchProps(ctx.client, ctx.subject.id, { assignedTo: to });
     await emitEvent(ctx.client, ctx.tenantId, ctx.subject.id, 'object.updated', { changed: ['assignedTo'], via: 'action' }, ctx.actor);
-    return {
-      targetObjectId: ctx.subject.id,
-      createdObjectId: null,
-      before: patched?.before ?? { assignedTo: undefined },
-      after: patched?.after ?? { assignedTo: to },
-    };
   },
   async undo(ctx, log) {
     if (log.targetObjectId && log.before) {
@@ -86,28 +88,24 @@ const equipmentOffline: ActionHandler = {
   undoable: true,
   describe: (s: ActionSubject) => `Set ${str(s.properties, 'label') ?? 'device'} offline + create calibration task`,
   canExecute: () => null,
-  async execute(ctx: ActionContext): Promise<WritebackResult> {
-    const p = ctx.subject.properties;
-    const prevStatus = typeof p.status === 'string' ? p.status : null;
+  async plan(ctx): Promise<WritebackPlan> {
+    const prevStatus = typeof ctx.subject.properties.status === 'string' ? ctx.subject.properties.status : null;
+    const taskId = randomUUID();
+    return { targetObjectId: ctx.subject.id, createdObjectId: taskId, before: { status: prevStatus }, after: { status: 'offline', calibrationTaskId: taskId } };
+  },
+  async apply(ctx, plan) {
     await patchProps(ctx.client, ctx.subject.id, { status: 'offline' });
     await emitEvent(ctx.client, ctx.tenantId, ctx.subject.id, 'object.updated', { changed: ['status'], status: 'offline', via: 'action' }, ctx.actor);
-    const label = str(p, 'label') ?? 'device';
-    const taskId = await insertObject(
+    const label = str(ctx.subject.properties, 'label') ?? 'device';
+    await insertObject(
       ctx.client,
       ctx.tenantId,
       'Task',
-      {
-        taskType: 'equipment_calibration',
-        label: `Recalibrate ${label}`,
-        requiredEvidence: ['document'],
-        forEquipment: ctx.subject.id,
-        createdByAction: 'equipment_offline',
-      },
+      { taskType: 'equipment_calibration', label: `Recalibrate ${label}`, requiredEvidence: ['document'], forEquipment: ctx.subject.id, createdByAction: 'equipment_offline' },
       ctx.actor,
-      { expected: 'calibrated' },
+      { expected: 'calibrated', id: plan.createdObjectId ?? undefined },
     );
-    await addLink(ctx.client, ctx.tenantId, taskId, ctx.subject.id, 'references');
-    return { targetObjectId: ctx.subject.id, createdObjectId: taskId, before: { status: prevStatus }, after: { status: 'offline', calibrationTaskId: taskId } };
+    await addLink(ctx.client, ctx.tenantId, plan.createdObjectId!, ctx.subject.id, 'references');
   },
   async undo(ctx, log) {
     if (log.targetObjectId && log.before) {
@@ -124,24 +122,21 @@ const flagReviewFollowup: ActionHandler = {
   undoable: true,
   describe: (s: ActionSubject) => `Create follow-up task for review ${str(s.properties, 'label') ?? s.id}`,
   canExecute: () => null,
-  async execute(ctx: ActionContext): Promise<WritebackResult> {
-    const p = ctx.subject.properties;
-    const rating = typeof p.rating === 'number' ? p.rating : undefined;
-    const taskId = await insertObject(
+  async plan(): Promise<WritebackPlan> {
+    const taskId = randomUUID();
+    return { createdObjectId: taskId, targetObjectId: null, before: null, after: { createdTaskId: taskId, taskType: 'review_followup' } };
+  },
+  async apply(ctx, plan) {
+    const rating = typeof ctx.subject.properties.rating === 'number' ? ctx.subject.properties.rating : undefined;
+    await insertObject(
       ctx.client,
       ctx.tenantId,
       'Task',
-      {
-        taskType: 'review_followup',
-        label: rating !== undefined ? `Follow up on ${rating}★ review` : 'Follow up on review',
-        requiredEvidence: [],
-        forReview: ctx.subject.id,
-        createdByAction: 'flag_review_followup',
-      },
+      { taskType: 'review_followup', label: rating !== undefined ? `Follow up on ${rating}★ review` : 'Follow up on review', requiredEvidence: [], forReview: ctx.subject.id, createdByAction: 'flag_review_followup' },
       ctx.actor,
+      { id: plan.createdObjectId ?? undefined },
     );
-    await addLink(ctx.client, ctx.tenantId, taskId, ctx.subject.id, 'references');
-    return { createdObjectId: taskId, targetObjectId: null, before: null, after: { createdTaskId: taskId, taskType: 'review_followup' } };
+    await addLink(ctx.client, ctx.tenantId, plan.createdObjectId!, ctx.subject.id, 'references');
   },
   async undo(ctx, log) {
     if (log.createdObjectId) await archiveObject(ctx.client, ctx.tenantId, log.createdObjectId, ctx.actor);

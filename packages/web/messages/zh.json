@@ -81,7 +81,8 @@
       "inventory": "库存充足"
     },
     "noteAction": "{n} 条指挥提示待处理",
-    "noteWatch": "需关注:存在待核实项"
+    "noteWatch": "需关注:存在待核实项",
+    "drilldown": "下钻"
   },
   "cues": {
     "title": "AI 副驾 · 指挥提示",
@@ -99,7 +100,9 @@
       "high": "高优先级",
       "med": "中优先级",
       "low": "低优先级"
-    }
+    },
+    "recent": "最近操作",
+    "undo": "撤销"
   },
   "agents": {
     "patient_flow": "患者流转",
@@ -191,5 +194,50 @@
     "noFile": "请先选择文件。",
     "loadFailed": "加载对象失败",
     "devNote": "开发环境:租户经 X-Tenant-Id 传递;生产环境改用 wx.login/openid 会话(S0-3),绝不信任客户端身份。"
+  },
+  "login": {
+    "title": "管理端登录",
+    "subtitle": "登录后进入指挥中心(开发环境为模拟登录)。",
+    "tenant": "诊所(租户)",
+    "name": "显示名称",
+    "signIn": "登录",
+    "signingIn": "登录中…",
+    "devNote": "开发环境:经 P1 会话的模拟经理登录(dev-gated,生产返回 404)。会话驱动租户,请求带 Bearer,SSE 用 ?session=;生产改用邮箱魔法链接 / SSO。",
+    "storageWarning": "本地存储不可用:登录状态不会被记住(应用仍可正常使用)。"
+  },
+  "shell": {
+    "tag": "管理端",
+    "manager": "经理",
+    "signOut": "退出",
+    "loading": "加载中…",
+    "storageOff": "存储已禁用"
+  },
+  "results": {
+    "executed": "已执行",
+    "blocked_high_risk": "已拦截(高风险,未执行)",
+    "recorded_intent": "仅记录意图",
+    "not_executable": "无法执行",
+    "undone": "已撤销"
+  },
+  "verify": {
+    "verified": "已验证",
+    "conflict": "冲突",
+    "pending": "待定",
+    "unverified": "未验证"
+  },
+  "domainPage": {
+    "counts": "{objects} 个对象 · {alerts} 条告警 · {cues} 条建议",
+    "back": "返回指挥中心",
+    "objects": "对象与任务",
+    "alerts": "告警",
+    "cues": "本域建议",
+    "noCues": "本域暂无待处理建议",
+    "empty": "暂无数据",
+    "timeline": "时间线",
+    "timelineTitle": "对象时间线",
+    "timelineHint": "在左侧对象上点「时间线」查看其验证故事。",
+    "selectPrompt": "选择一个对象,查看其事件与验证账本。",
+    "ledger": "验证账本",
+    "events": "事件"
   }
 }

@@ -57,6 +57,12 @@ export class ObjectsController {
     return this.objects.get(tenantId, id);
   }
 
+  /** P3 drill-down: an object's full story — current state + events + verification ledger. */
+  @Get(':id/timeline')
+  timeline(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.objects.timeline(tenantId, id);
+  }
+
   @Patch(':id')
   update(@TenantId() tenantId: string, @Param('id') id: string, @Body() body: UpdateObjectInput) {
     return this.objects.update(tenantId, id, body);
