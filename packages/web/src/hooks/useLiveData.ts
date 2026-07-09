@@ -9,25 +9,30 @@ export type FeedStatus = 'connecting' | 'live' | 'offline';
 export interface LiveData {
   overview: OverviewResult | null;
   recommendations: RecommendationRecord[];
+  /** Recently acted cues (approve/undo) this session, with their execution result. */
+  results: RecommendationRecord[];
   status: FeedStatus;
-  /** Last SSE change type observed, for a subtle "just updated" pulse. */
   lastEventAt: number | null;
   error: string | null;
   refresh: () => void;
-  act: (id: string, action: 'approve' | 'dismiss' | 'snooze') => Promise<void>;
+  approve: (id: string) => Promise<void>;
+  undo: (id: string) => Promise<void>;
+  dismiss: (id: string) => Promise<void>;
+  snooze: (id: string) => Promise<void>;
 }
 
 /**
- * One hook wiring the command center to the LIVE API: initial load of the overview
- * aggregate + open recommendations, an EventSource on /objects/stream that debounces a
- * refetch on every change, and optimistic approve/dismiss/snooze. Fetches run only in the
- * browser (useEffect), so the static prerender stays data-free and never crashes when the
- * API is down — it just shows the offline state.
+ * Wires the command center to the LIVE API using the manager SESSION token: initial load of the
+ * overview aggregate + open recommendations, an EventSource on /objects/stream (?session=) that
+ * debounces a refetch on every change and AUTO-RECONNECTS with capped backoff, and approve/undo/
+ * dismiss/snooze. Approve/undo surface the execution result (executed / blocked / recorded / undone)
+ * in `results`. All fetches run only in the browser, so the static prerender stays data-free.
  */
-export function useLiveData(tenantId?: string): LiveData {
-  const api = useMemo(() => makeApi(tenantId), [tenantId]);
+export function useLiveData(token: string): LiveData {
+  const api = useMemo(() => makeApi({ token }), [token]);
   const [overview, setOverview] = useState<OverviewResult | null>(null);
   const [recommendations, setRecommendations] = useState<RecommendationRecord[]>([]);
+  const [results, setResults] = useState<RecommendationRecord[]>([]);
   const [status, setStatus] = useState<FeedStatus>('connecting');
   const [error, setError] = useState<string | null>(null);
   const [lastEventAt, setLastEventAt] = useState<number | null>(null);
@@ -50,35 +55,75 @@ export function useLiveData(tenantId?: string): LiveData {
     [api],
   );
 
-  // Initial load.
   useEffect(() => {
     const ctrl = new AbortController();
     void load(ctrl.signal);
     return () => ctrl.abort();
   }, [load]);
 
-  // SSE — refetch (debounced) on every object change for this tenant.
+  // SSE with auto-reconnect (capped exponential backoff). On (re)connect we reload so a gap while
+  // offline is reconciled. EventSource can't set headers, so the session travels as ?session=.
   useEffect(() => {
     if (typeof window === 'undefined' || typeof EventSource === 'undefined') return;
-    const es = new EventSource(api.streamUrl());
-    es.onopen = () => setStatus('live');
-    es.onmessage = () => {
-      setLastEventAt(Date.now());
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => void load(), 250);
+    let es: EventSource | null = null;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    let attempt = 0;
+    let closed = false;
+
+    const connect = (): void => {
+      es = new EventSource(api.streamUrl());
+      es.onopen = () => {
+        attempt = 0;
+        setStatus('live');
+        void load();
+      };
+      es.onmessage = () => {
+        setLastEventAt(Date.now());
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => void load(), 250);
+      };
+      es.onerror = () => {
+        setStatus('offline');
+        es?.close();
+        if (closed) return;
+        attempt += 1;
+        const delay = Math.min(1000 * 2 ** (attempt - 1), 15000);
+        retry = setTimeout(connect, delay);
+      };
     };
-    es.onerror = () => setStatus((s) => (s === 'live' ? 'live' : 'offline'));
+    connect();
+
     return () => {
-      es.close();
+      closed = true;
+      es?.close();
+      if (retry) clearTimeout(retry);
       if (timer.current) clearTimeout(timer.current);
     };
   }, [api, load]);
 
   const refresh = useCallback(() => void load(), [load]);
 
-  const act = useCallback(
-    async (id: string, action: 'approve' | 'dismiss' | 'snooze') => {
-      // Optimistic: drop the cue from the open feed immediately; SSE + refetch reconcile.
+  const approve = useCallback(
+    async (id: string) => {
+      const rec = await api.approve(id);
+      setResults((prev) => [rec, ...prev.filter((r) => r.id !== id)]);
+      setRecommendations((prev) => prev.filter((r) => r.id !== id));
+      void load();
+    },
+    [api, load],
+  );
+
+  const undo = useCallback(
+    async (id: string) => {
+      await api.undo(id);
+      setResults((prev) => prev.filter((r) => r.id !== id)); // reopened → returns to the open feed
+      void load();
+    },
+    [api, load],
+  );
+
+  const remove = useCallback(
+    async (id: string, action: 'dismiss' | 'snooze') => {
       setRecommendations((prev) => prev.filter((r) => r.id !== id));
       try {
         await api.act(id, action);
@@ -89,5 +134,8 @@ export function useLiveData(tenantId?: string): LiveData {
     [api, load],
   );
 
-  return { overview, recommendations, status, lastEventAt, error, refresh, act };
+  const dismiss = useCallback((id: string) => remove(id, 'dismiss'), [remove]);
+  const snooze = useCallback((id: string) => remove(id, 'snooze'), [remove]);
+
+  return { overview, recommendations, results, status, lastEventAt, error, refresh, approve, undo, dismiss, snooze };
 }
