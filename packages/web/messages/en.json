@@ -82,7 +82,8 @@
       "inventory": "Stock sufficient"
     },
     "noteAction": "{n} cue(s) awaiting review",
-    "noteWatch": "Attention: unresolved items"
+    "noteWatch": "Attention: unresolved items",
+    "drilldown": "Drill in"
   },
   "cues": {
     "title": "AI Co-Pilot · Cues",
@@ -100,7 +101,9 @@
       "high": "High priority",
       "med": "Medium",
       "low": "Low"
-    }
+    },
+    "recent": "Recently acted",
+    "undo": "Undo"
   },
   "agents": {
     "patient_flow": "Patient flow",
@@ -200,5 +203,50 @@
     "noFile": "Choose a file first.",
     "loadFailed": "Failed to load objects",
     "devNote": "Dev: tenant travels via X-Tenant-Id; production uses a wx.login/openid session (S0-3) and never trusts a client-supplied identity."
+  },
+  "login": {
+    "title": "Manager sign-in",
+    "subtitle": "Sign in to enter the command center (mock login in dev).",
+    "tenant": "Clinic (tenant)",
+    "name": "Display name",
+    "signIn": "Sign in",
+    "signingIn": "Signing in…",
+    "devNote": "Dev: mock manager login via the P1 session (dev-gated; 404 in prod). The session drives the tenant; requests carry Bearer and SSE uses ?session=. Production uses email magic-link / SSO.",
+    "storageWarning": "Local storage is unavailable: your sign-in won't be remembered (the app still works)."
+  },
+  "shell": {
+    "tag": "Manager",
+    "manager": "Manager",
+    "signOut": "Sign out",
+    "loading": "Loading…",
+    "storageOff": "Storage off"
+  },
+  "results": {
+    "executed": "Executed",
+    "blocked_high_risk": "Blocked (high-risk, not run)",
+    "recorded_intent": "Intent recorded",
+    "not_executable": "Not executable",
+    "undone": "Undone"
+  },
+  "verify": {
+    "verified": "Verified",
+    "conflict": "Conflict",
+    "pending": "Pending",
+    "unverified": "Unverified"
+  },
+  "domainPage": {
+    "counts": "{objects} objects · {alerts} alerts · {cues} cues",
+    "back": "Back to command center",
+    "objects": "Objects & tasks",
+    "alerts": "Alerts",
+    "cues": "Domain cues",
+    "noCues": "No open cues for this domain",
+    "empty": "Nothing here yet",
+    "timeline": "Timeline",
+    "timelineTitle": "Object timeline",
+    "timelineHint": "Select “Timeline” on an object to see its verification story.",
+    "selectPrompt": "Pick an object to see its events and verification ledger.",
+    "ledger": "Verification ledger",
+    "events": "Events"
   }
 }
