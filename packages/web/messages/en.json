@@ -212,7 +212,10 @@
     "signIn": "Sign in",
     "signingIn": "Signing in…",
     "devNote": "Dev: mock manager login via the P1 session (dev-gated; 404 in prod). The session drives the tenant; requests carry Bearer and SSE uses ?session=. Production uses email magic-link / SSO.",
-    "storageWarning": "Local storage is unavailable: your sign-in won't be remembered (the app still works)."
+    "storageWarning": "Local storage is unavailable: your sign-in won't be remembered (the app still works).",
+    "password": "Password",
+    "stagingSubtitle": "Staging: enter the manager password to enter (synthetic data).",
+    "stagingNote": "Staging uses a single shared password (server env-gated; the open dev-login stays disabled in prod). Synthetic data only."
   },
   "shell": {
     "tag": "Manager",
