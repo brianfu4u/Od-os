@@ -222,6 +222,12 @@ export async function runHttpSmoke({
     check(le.some((x) => x.result === 'executed') && le.some((x) => x.result === 'undone'), 'action_log shows executed + undone');
   }
 
+  // ── P3 drill-down: the object timeline powers the domain detail story ──
+  const tl = await (await fetch(`${base}/objects/${taskId}/timeline`, { headers: H })).json();
+  check(!!tl.object && tl.object.id === taskId, 'GET /objects/:id/timeline returns the object');
+  check(Array.isArray(tl.events) && tl.events.length >= 1, `timeline has events (${tl.events?.length ?? 0})`);
+  check(Array.isArray(tl.ledger) && tl.ledger.length >= 1, `timeline has verification-ledger rows (${tl.ledger?.length ?? 0})`);
+
   ac.abort();
   await ssePromise;
   check(sseEvents >= 1, `SSE stream emitted ${sseEvents} change event(s) during the loop`);
