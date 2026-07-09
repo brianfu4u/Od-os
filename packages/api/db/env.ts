@@ -34,3 +34,23 @@ export function requireDatabaseUrl(): string {
   }
   return url;
 }
+
+/** TLS for hosted Postgres — on unless the host is local, or forced via DATABASE_SSL=true|false. */
+export function sslFromUrl(url: string): { rejectUnauthorized: boolean } | undefined {
+  if (process.env.DATABASE_SSL === 'false') return undefined;
+  if (process.env.DATABASE_SSL === 'true') return { rejectUnauthorized: false };
+  try {
+    const host = new URL(url).hostname;
+    const local = host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.local');
+    return local ? undefined : { rejectUnauthorized: false };
+  } catch {
+    return undefined;
+  }
+}
+
+/** `pg` Client config (connection string + SSL) for the owner-role scripts (migrate/seed/reset). */
+export function clientConfig(): { connectionString: string; ssl?: { rejectUnauthorized: boolean } } {
+  const connectionString = requireDatabaseUrl();
+  const ssl = sslFromUrl(connectionString);
+  return ssl ? { connectionString, ssl } : { connectionString };
+}
