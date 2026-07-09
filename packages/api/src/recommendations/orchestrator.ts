@@ -9,7 +9,15 @@ const DEFAULT_CAP = 5;
  * seam where an LLM could later re-rank / plain-word the cues.
  */
 export class Orchestrator {
-  orchestrate(candidates: RecommendationCandidate[], cap: number = DEFAULT_CAP): RankedRecommendation[] {
+  /**
+   * @param penalties P4/S8 read-back: per-domain priority penalties learned from feedback (a domain
+   *   whose cues are repeatedly ignored is subtracted from its rank score → it sinks in the feed).
+   */
+  orchestrate(
+    candidates: RecommendationCandidate[],
+    cap: number = DEFAULT_CAP,
+    penalties: Record<string, number> = {},
+  ): RankedRecommendation[] {
     // 1) De-duplicate: same domain + object + title.
     const deduped = new Map<string, RecommendationCandidate>();
     for (const c of candidates) {
@@ -18,7 +26,8 @@ export class Orchestrator {
     }
     const scored = [...deduped.values()].map((c) => ({
       ...c,
-      score: SEVERITY_WEIGHT[c.severity] * (c.impact ?? 1),
+      // severity × impact, minus any learned downgrade for this domain (bounded in learn).
+      score: SEVERITY_WEIGHT[c.severity] * (c.impact ?? 1) - (penalties[c.domain] ?? 0),
     }));
 
     // 2) De-conflict: candidates contending for the same resource → keep the top-scored,
