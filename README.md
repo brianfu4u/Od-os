@@ -336,6 +336,45 @@ Out of scope (S4+): executing approved actions (write-backs) and the LLM cue re-
 
 ---
 
+## S4 — action write-back (approve does real work) ✔
+
+Approving a Co-Pilot cue now **executes** it — but only within a hard safety boundary: **low-risk,
+strictly INTERNAL ontology write-backs**, never an external side effect. Everything runs inside
+`withTenant()` and is recorded in an append-only **`action_log`**.
+
+- **Whitelist (the only auto-executable actions):**
+  - `inventory_reorder` → create an internal restock **Task**;
+  - `reassign_task` → set a Task's `assignedTo`;
+  - `equipment_offline` → set an Equipment `status=offline` **and** create a calibration **Task**;
+  - `flag_review_followup` → create a follow-up **Task** for a negative review.
+- **High-risk actions are never on the whitelist and are never auto-executed** — messaging a
+  patient, submitting a claim, calling a supplier/payment API, etc. Approving one is **recorded**
+  (`blocked_high_risk`) but takes no world action; a human still does it manually.
+- **`action_log`** (migration 0008) is append-only like `events` / `verification_ledger` (trigger +
+  withheld UPDATE/DELETE grants), RLS-forced, and records `{recommendation, actionType, result,
+  actor, before/after, …}`.
+- **Idempotent:** a partial unique index on `action_log(tenant_id, recommendation_id) WHERE
+  result='executed'` plus a `SELECT … FOR UPDATE` lock and an execution marker on the cue mean a
+  repeated approval never executes twice.
+- **Reversible:** `POST /recommendations/:id/undo` restores the prior state (all four write-backs are
+  undoable); `GET /recommendations/:id/actions` returns the log.
+- **Human-in-the-loop throughout:** only a manager's approval triggers execution.
+
+```
+approve  ─▶ whitelisted low-risk?  ─▶ execute internal write-back + append action_log + emit event
+                     └─ high-risk / not whitelisted ─▶ record only (no world action)
+undo     ─▶ restore before-state + append an 'undone' action_log row
+```
+
+Reproduced as tests (unit gate + integration): approve low-risk → target object changes + one
+executed log row; approve high-risk → recorded, not executed, zero objects created; repeat approve →
+no second execution; undo → prior state restored; `action_log` UPDATE/DELETE blocked; cross-tenant
+isolated. **TODO(prod):** real external integrations (supplier ordering, claim submission, patient
+messaging, payment) remain out of scope and require real credentials + compliance; a real
+`reassign_task` should resolve a Staff id and move the `assignedTo` link, not just stamp a property.
+
+---
+
 ## Ground rules
 
 - **Multi-tenant from day one** — `tenant_id` + RLS on every data table.
