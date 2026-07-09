@@ -14,3 +14,4 @@ export * from './api/uploads.contract';
 export * from './api/verification.contract';
 export * from './api/recommendation.contract';
 export * from './api/overview.contract';
+export * from './api/learning.contract';
