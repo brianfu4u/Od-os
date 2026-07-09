@@ -1,8 +1,14 @@
 import { Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import type { RecommendationStatus } from '@clearview/shared';
 import { TenantGuard } from '../tenant/tenant.guard';
-import { TenantId } from '../tenant/tenant.decorator';
+import { TenantId, AuthIdentity } from '../tenant/tenant.decorator';
+import type { SessionIdentity } from '../auth/session.types';
 import { RecommendationService } from './recommendation.service';
+
+/** Who approved — recorded on every action_log row / event. Session-derived, never client-supplied. */
+function actorOf(identity?: SessionIdentity): string {
+  return identity?.managerId ?? identity?.staffId ?? identity?.staffHandle ?? 'manager';
+}
 
 @UseGuards(TenantGuard)
 @Controller('recommendations')
@@ -33,10 +39,26 @@ export class RecommendationController {
     return { created: created.length, ids: created };
   }
 
-  // Human-in-the-loop: these record intent + emit an event; no world action runs in S3.
+  /**
+   * Human-in-the-loop. Approving runs the P2/S4 action write-back layer: if the cue's action is on
+   * the low-risk INTERNAL whitelist it is executed (ontology write + append-only action_log), a
+   * high-risk action is recorded but NEVER executed, and anything else records intent only.
+   */
   @Post(':id/approve')
-  approve(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.recommendations.act(tenantId, id, 'approved');
+  approve(@TenantId() tenantId: string, @AuthIdentity() identity: SessionIdentity | undefined, @Param('id') id: string) {
+    return this.recommendations.act(tenantId, id, 'approved', actorOf(identity));
+  }
+
+  /** Reverse a previously executed write-back and reopen the cue (reversible actions only). */
+  @Post(':id/undo')
+  undo(@TenantId() tenantId: string, @AuthIdentity() identity: SessionIdentity | undefined, @Param('id') id: string) {
+    return this.recommendations.undo(tenantId, id, actorOf(identity));
+  }
+
+  /** The append-only action_log for a cue — what its approval did (executed / blocked / undone). */
+  @Get(':id/actions')
+  actions(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.recommendations.actionLog(tenantId, id);
   }
 
   @Post(':id/dismiss')
