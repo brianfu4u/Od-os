@@ -40,12 +40,20 @@ export async function insertObject(
   type: string,
   properties: Record<string, unknown>,
   actor: string,
-  states: { expected?: string | null; claimed?: string | null } = {},
+  states: { expected?: string | null; claimed?: string | null; id?: string } = {},
 ): Promise<string> {
+  // An explicit id lets the executor pre-generate the created object's id during planning, so the
+  // action_log slot is claimed (with created_object_id known) BEFORE this write runs.
+  const withId = typeof states.id === 'string' && states.id.length > 0;
   const res = await c.query<{ id: string }>(
-    `INSERT INTO objects (tenant_id, type, properties, expected_state, claimed_state)
-     VALUES ($1, $2, $3::jsonb, $4, $5) RETURNING id`,
-    [tenantId, type, JSON.stringify(properties), states.expected ?? null, states.claimed ?? null],
+    withId
+      ? `INSERT INTO objects (id, tenant_id, type, properties, expected_state, claimed_state)
+         VALUES ($6, $1, $2, $3::jsonb, $4, $5) RETURNING id`
+      : `INSERT INTO objects (tenant_id, type, properties, expected_state, claimed_state)
+         VALUES ($1, $2, $3::jsonb, $4, $5) RETURNING id`,
+    withId
+      ? [tenantId, type, JSON.stringify(properties), states.expected ?? null, states.claimed ?? null, states.id]
+      : [tenantId, type, JSON.stringify(properties), states.expected ?? null, states.claimed ?? null],
   );
   const id = res.rows[0]!.id;
   await emitEvent(c, tenantId, id, 'object.created', { type, via: 'action' }, actor);
