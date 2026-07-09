@@ -375,6 +375,39 @@ messaging, payment) remain out of scope and require real credentials + complianc
 
 ---
 
+## P3 — command center on real data + six-domain drill-down ✔
+
+The manager cockpit is now a usable product, wired to the live backend end to end.
+
+- **Manager session (dev-gated):** sign in via the P1 `/auth/manager/dev-login` mock (404 in prod;
+  real magic-link / SSO is a TODO). The **session token drives the tenant** — every request carries
+  `Authorization: Bearer`, and SSE (which can't set headers) carries `?session=`. The token persists
+  through safe-storage; a disabled storage never white-screens (you just re-login).
+- **Live + realtime:** the six 360° tiles (`/overview`), the ranked cue feed (`/recommendations`),
+  the verification ledger and comms stream all read from real endpoints; an EventSource on
+  `/objects/stream` refetches on every change and **auto-reconnects with capped backoff** (reloading
+  on reconnect so an offline gap is reconciled). No mock/hardcoded data.
+- **Approve / undo:** each cue's buttons call `POST /recommendations/:id/approve` and `/undo`. The UI
+  distinguishes the three outcomes — **executed** / **blocked (high-risk, not run)** / **intent
+  recorded** — and offers **Undo** on an executed, reversible action; evidence chips, confidence, and
+  the "why" are shown throughout.
+- **Drill-down:** each tile links to a per-domain page listing that domain's objects/tasks, alerts,
+  and cues with verified-state chips, plus a **timeline** drawer per object (`GET /objects/:id/timeline`
+  → events + verification-ledger) — e.g. the Room-3 conflict → verified story.
+- **Trilingual** (中/EN/日, default Chinese), including the categorical dynamic content (verdicts,
+  result states, severities).
+
+**P2.1 hardening (from the PR #12 review):** the action executor is now **claim-first** — it records
+the `action_log` `executed` slot (`ON CONFLICT DO NOTHING`) *before* performing side effects, symmetric
+with undo, so a lost idempotency race performs **no** world write. Covered by a concurrency test (two
+parallel approves → exactly one execution).
+
+**TODO(prod):** real manager login (magic-link / SSO); free-text cue titles/why are agent-generated
+English (a translation layer for arbitrary dynamic strings is later work — categorical content is
+translated today).
+
+---
+
 ## Ground rules
 
 - **Multi-tenant from day one** — `tenant_id` + RLS on every data table.
