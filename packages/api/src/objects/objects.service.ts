@@ -6,6 +6,7 @@ import type {
   UpdateObjectInput,
   ObjectQuery,
   CreateLinkInput,
+  ObjectTimeline,
 } from '@clearview/shared';
 import { ObjectsRepository } from './objects.repository';
 import { RealtimeService } from './realtime.service';
@@ -42,6 +43,11 @@ export class ObjectsService {
 
   list(tenantId: string, query: ObjectQuery): Promise<OntologyObject[]> {
     return this.repo.list(tenantId, query);
+  }
+
+  /** P3 drill-down: object + its events + verification-ledger rows (tenant-scoped). */
+  timeline(tenantId: string, id: string): Promise<ObjectTimeline> {
+    return this.repo.timeline(tenantId, id);
   }
 
   async update(tenantId: string, id: string, input: UpdateObjectInput): Promise<OntologyObject> {
