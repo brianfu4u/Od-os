@@ -3,6 +3,7 @@ import type { ActionLogRecord, OperatingTempo, RecommendationRecord, Recommendat
 import { RealtimeService } from '../objects/realtime.service';
 import { DomainEventBus } from '../events/domain-event-bus';
 import type { ExecutionOutcome } from '../actions/actions.types';
+import { LearningRepository } from '../learning/learning.repository';
 import { RecommendationRepository } from './recommendation.repository';
 import { DEFAULT_AGENTS, type DomainAgent } from './agents';
 import { Orchestrator } from './orchestrator';
@@ -17,6 +18,8 @@ export class RecommendationService {
     private readonly repo: RecommendationRepository,
     private readonly realtime: RealtimeService,
     @Optional() private readonly bus?: DomainEventBus,
+    // P4/S8: read learned per-domain priority penalties. Optional + default so hand-wired tests work.
+    @Optional() private readonly learning: LearningRepository = new LearningRepository(),
   ) {
     // Event seam: a completed verification (conflict/pending/overdue…) fans out to the agents.
     this.bus?.on(
@@ -32,7 +35,8 @@ export class RecommendationService {
     if (!ctx) return [];
     const candidates = this.agents.flatMap((agent) => agent.propose(ctx));
     if (candidates.length === 0) return [];
-    const ranked = this.orchestrator.orchestrate(candidates);
+    const penalties = await this.learning.getDomainPriorityPenalties(tenantId);
+    const ranked = this.orchestrator.orchestrate(candidates, 5, penalties);
     const created = await this.repo.persist(tenantId, ranked);
     for (const id of created) {
       this.realtime.publish({ kind: 'created', tenantId, objectId: id, type: 'Recommendation', at: new Date().toISOString() });
@@ -50,7 +54,8 @@ export class RecommendationService {
     const contexts = await this.repo.gatherSweepContexts(tenantId);
     const candidates = contexts.flatMap((ctx) => this.agents.flatMap((agent) => agent.propose(ctx)));
     if (candidates.length === 0) return [];
-    const ranked = this.orchestrator.orchestrate(candidates, 25);
+    const penalties = await this.learning.getDomainPriorityPenalties(tenantId);
+    const ranked = this.orchestrator.orchestrate(candidates, 25, penalties);
     const created = await this.repo.persist(tenantId, ranked);
     for (const id of created) {
       this.realtime.publish({ kind: 'created', tenantId, objectId: id, type: 'Recommendation', at: new Date().toISOString() });
