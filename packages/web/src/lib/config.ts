@@ -4,9 +4,18 @@
  * DEV-ONLY convenience matching the API's dev-only TenantGuard.
  */
 
-/** API origin. Browser reads NEXT_PUBLIC_API_BASE; defaults to the local dev API. */
+/**
+ * API origin. Reads `NEXT_PUBLIC_API_BASE_URL` (the documented name in .env.example / deploy) and
+ * falls back to the legacy `NEXT_PUBLIC_API_BASE`, then to the local dev API. (Both are accepted so
+ * a staging deploy that sets `NEXT_PUBLIC_API_BASE_URL` actually points the browser at the API.)
+ */
 export const API_BASE =
-  (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_BASE) || 'http://localhost:3001';
+  (typeof process !== 'undefined' &&
+    (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE)) ||
+  'http://localhost:3001';
+
+/** Staging mode: the login form uses the password-gated staging login instead of the dev tenant picker. */
+export const IS_STAGING = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_STAGING === 'true';
 
 /** Dev tenant — Tenant A from the seed (the Room-3 cross-verification story). */
 export const DEV_TENANT_ID =
