@@ -183,6 +183,45 @@ export async function runHttpSmoke({
   }
   check(domains.size >= 6, `open cues span all ${domains.size} domains (≥6)`);
 
+  // ── P2/S4 action write-back: approve executes a whitelisted internal action; high-risk is blocked ──
+  log('\naction write-back (P2/S4):');
+  const findCue = (pred) => (Array.isArray(feed) ? feed.find(pred) : undefined);
+  const hasAction = (r, t) => (r.actions || []).some((a) => a.actionType === t);
+  const actionsOf = async (id) => await (await fetch(`${base}/recommendations/${id}/actions`, { headers: H })).json();
+
+  const invCue = findCue((r) => hasAction(r, 'inventory_reorder'));
+  check(!!invCue, 'found an inventory_reorder cue to approve');
+  if (invCue) {
+    const before = (await (await fetch(`${base}/objects?type=Task`, { headers: H })).json()).length;
+    const appr = await (await fetch(`${base}/recommendations/${invCue.id}/approve`, { method: 'POST', headers: H })).json();
+    check(appr.execution?.state === 'executed', `approve inventory_reorder → executed (got ${appr.execution?.state})`);
+    const after = (await (await fetch(`${base}/objects?type=Task`, { headers: H })).json()).length;
+    check(after === before + 1, `a restock Task was created (${before} → ${after})`);
+    const l1 = await actionsOf(invCue.id);
+    check(Array.isArray(l1) && l1.filter((x) => x.result === 'executed').length === 1, 'action_log has exactly one executed row');
+    await fetch(`${base}/recommendations/${invCue.id}/approve`, { method: 'POST', headers: H }); // re-approve
+    const l2 = await actionsOf(invCue.id);
+    check(l2.filter((x) => x.result === 'executed').length === 1, 'repeat approve is idempotent (still one executed row)');
+  }
+
+  const claimCue = findCue((r) => hasAction(r, 'submit_claim'));
+  check(!!claimCue, 'found a high-risk (submit_claim) cue');
+  if (claimCue) {
+    const appr = await (await fetch(`${base}/recommendations/${claimCue.id}/approve`, { method: 'POST', headers: H })).json();
+    check(appr.execution?.state === 'blocked_high_risk', `approve high-risk → blocked_high_risk (got ${appr.execution?.state})`);
+    const lc = await actionsOf(claimCue.id);
+    check(lc.some((x) => x.result === 'blocked_high_risk') && !lc.some((x) => x.result === 'executed'), 'high-risk recorded, never executed');
+  }
+
+  const eqCue = findCue((r) => hasAction(r, 'equipment_offline'));
+  if (eqCue) {
+    await fetch(`${base}/recommendations/${eqCue.id}/approve`, { method: 'POST', headers: H });
+    const undo = await (await fetch(`${base}/recommendations/${eqCue.id}/undo`, { method: 'POST', headers: H })).json();
+    check(undo.execution?.state === 'undone', `undo equipment_offline → undone (got ${undo.execution?.state})`);
+    const le = await actionsOf(eqCue.id);
+    check(le.some((x) => x.result === 'executed') && le.some((x) => x.result === 'undone'), 'action_log shows executed + undone');
+  }
+
   ac.abort();
   await ssePromise;
   check(sseEvents >= 1, `SSE stream emitted ${sseEvents} change event(s) during the loop`);

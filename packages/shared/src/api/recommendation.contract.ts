@@ -62,6 +62,44 @@ export interface RecommendationRecord {
   status: RecommendationStatus;
   objectId: string;
   tradeoff?: string;
+  /** P2/S4: outcome of executing this cue when approved (present once acted on). */
+  execution?: RecommendationExecution;
+}
+
+/**
+ * P2/S4 action write-back outcomes. `executed` = a whitelisted low-risk INTERNAL ontology
+ * write-back was applied; `blocked_high_risk` = a high-risk action was approved but deliberately
+ * NOT executed (recorded only); `recorded_intent` = nothing to auto-execute (a nudge / manual
+ * action); `not_executable` = a whitelisted action could not run (e.g. missing target);
+ * `undone` = a prior executed action was reversed.
+ */
+export type ActionResult = 'executed' | 'blocked_high_risk' | 'recorded_intent' | 'not_executable' | 'undone';
+
+/** Compact execution marker stored on the Recommendation (also the idempotency guard). */
+export interface RecommendationExecution {
+  state: ActionResult;
+  actionType?: string;
+  riskTier?: RiskTier;
+  actionLogId?: string;
+  targetObjectId?: string | null;
+  createdObjectId?: string | null;
+  undoable?: boolean;
+  at?: string;
+}
+
+/** A row of the append-only action_log — the auditable record of what a manager's approval did. */
+export interface ActionLogRecord {
+  id: string;
+  recommendationId: string;
+  actionType: string;
+  result: ActionResult;
+  riskTier?: RiskTier;
+  actor?: string;
+  targetObjectId?: string | null;
+  createdObjectId?: string | null;
+  undoable: boolean;
+  undoOf?: string | null;
+  at: string;
 }
 
 /** Rolled-up clinic health for the command-center podium header. */

@@ -1,13 +1,24 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import type { PoolClient } from 'pg';
 import type {
+  ActionLogRecord,
   OperatingTempo,
+  ProposedAction,
   RankedRecommendation,
   RecommendationRecord,
   RecommendationStatus,
 } from '@clearview/shared';
 import { withTenant } from '../database/tenant-context';
+import { ActionExecutor } from '../actions/action-executor';
+import type { ExecutionOutcome } from '../actions/actions.types';
 import type { AgentContext } from './agents';
+
+/** Result of acting on an approval: the updated record + what the write-back did. */
+export interface ApprovalResult {
+  record: RecommendationRecord | null;
+  outcome: ExecutionOutcome | null;
+  deduped: boolean;
+}
 
 interface ObjRow {
   id: string;
@@ -20,6 +31,10 @@ interface ObjRow {
 
 @Injectable()
 export class RecommendationRepository {
+  // The action write-back layer (P2/S4). Optional + default-constructed so hand-wired tests
+  // (`new RecommendationRepository()`) keep working without wiring the executor.
+  constructor(@Optional() private readonly executor: ActionExecutor = new ActionExecutor()) {}
+
   /** Build the agent context for an object: the object + its latest Alert. */
   async gatherContext(tenantId: string, objectId: string): Promise<AgentContext | null> {
     return withTenant(tenantId, async (c) => {
@@ -189,12 +204,125 @@ export class RecommendationRepository {
       if (!row) return null;
       const properties = { ...row.properties, status };
       await c.query(`UPDATE objects SET properties = $2::jsonb WHERE id = $1`, [id, JSON.stringify(properties)]);
-      // Human-in-the-loop: this records intent only; no world action is executed in S3.
+      // dismiss / snooze record intent only — no world action. Approvals go through
+      // approveAndExecute() (P2/S4), which may run a whitelisted internal write-back.
       await c.query(
         `INSERT INTO events (tenant_id, object_id, event_type, payload, actor) VALUES ($1, $2, $3, $4::jsonb, 'manager')`,
         [tenantId, id, `recommendation.${status}`, JSON.stringify({ status })],
       );
       return toRecord(id, properties);
+    });
+  }
+
+  /**
+   * P2/S4: approve a recommendation and, if its action is on the low-risk internal write-back
+   * whitelist, EXECUTE it — all atomically in one withTenant() tx. `SELECT … FOR UPDATE` locks the
+   * recommendation row so concurrent approves serialize; the execution marker on the object makes a
+   * repeat approve a no-op (idempotent), and the executor's action_log unique index is the DB backstop.
+   */
+  async approveAndExecute(tenantId: string, id: string, actor: string): Promise<ApprovalResult> {
+    return withTenant(tenantId, async (c) => {
+      const cur = await c.query<{ properties: Record<string, unknown> }>(
+        `SELECT properties FROM objects WHERE id = $1 AND type = 'Recommendation' FOR UPDATE`,
+        [id],
+      );
+      const row = cur.rows[0];
+      if (!row) return { record: null, outcome: null, deduped: false };
+      const props = row.properties ?? {};
+
+      // Idempotent: already acted on → never re-execute. Ensure status reflects the approval.
+      const existing = props.execution as ExecutionOutcome | undefined;
+      if (existing) {
+        if (props.status !== 'approved') {
+          const p2 = { ...props, status: 'approved' as RecommendationStatus };
+          await c.query(`UPDATE objects SET properties = $2::jsonb WHERE id = $1`, [id, JSON.stringify(p2)]);
+          return { record: toRecord(id, p2), outcome: existing, deduped: true };
+        }
+        return { record: toRecord(id, props), outcome: existing, deduped: true };
+      }
+
+      const actions = Array.isArray(props.actions) ? (props.actions as ProposedAction[]) : [];
+      const objectId = String(props.objectId ?? '');
+      const outcome = await this.executor.onApprove({ client: c, tenantId, recommendation: { id, objectId, actions }, actor });
+
+      const marker = {
+        state: outcome.state,
+        ...(outcome.actionType ? { actionType: outcome.actionType } : {}),
+        ...(outcome.riskTier ? { riskTier: outcome.riskTier } : {}),
+        ...(outcome.actionLogId ? { actionLogId: outcome.actionLogId } : {}),
+        ...(outcome.targetObjectId ? { targetObjectId: outcome.targetObjectId } : {}),
+        ...(outcome.createdObjectId ? { createdObjectId: outcome.createdObjectId } : {}),
+        undoable: outcome.undoable,
+        at: new Date().toISOString(),
+      };
+      const nextProps = { ...props, status: 'approved' as RecommendationStatus, execution: marker };
+      await c.query(`UPDATE objects SET properties = $2::jsonb WHERE id = $1`, [id, JSON.stringify(nextProps)]);
+      await c.query(
+        `INSERT INTO events (tenant_id, object_id, event_type, payload, actor) VALUES ($1, $2, 'recommendation.approved', $3::jsonb, $4)`,
+        [tenantId, id, JSON.stringify({ status: 'approved', execution: outcome.state }), actor],
+      );
+      return { record: toRecord(id, nextProps), outcome, deduped: false };
+    });
+  }
+
+  /** P2/S4: reverse the executed write-back for a recommendation (idempotent) and reopen the cue. */
+  async undoAction(tenantId: string, id: string, actor: string): Promise<ApprovalResult> {
+    return withTenant(tenantId, async (c) => {
+      const cur = await c.query<{ properties: Record<string, unknown> }>(
+        `SELECT properties FROM objects WHERE id = $1 AND type = 'Recommendation' FOR UPDATE`,
+        [id],
+      );
+      const row = cur.rows[0];
+      if (!row) return { record: null, outcome: null, deduped: false };
+      const props = row.properties ?? {};
+      const objectId = String(props.objectId ?? '');
+      const outcome = await this.executor.undo({ client: c, tenantId, recommendation: { id, objectId }, actor });
+
+      // Only mutate the cue when a NEW undo actually happened (actionLogId present).
+      if (outcome.state === 'undone' && outcome.actionLogId) {
+        const prevExec = (props.execution as Record<string, unknown>) ?? {};
+        const nextProps = {
+          ...props,
+          status: 'open' as RecommendationStatus,
+          execution: { ...prevExec, state: 'undone', undoable: false, at: new Date().toISOString() },
+        };
+        await c.query(`UPDATE objects SET properties = $2::jsonb WHERE id = $1`, [id, JSON.stringify(nextProps)]);
+        await c.query(
+          `INSERT INTO events (tenant_id, object_id, event_type, payload, actor) VALUES ($1, $2, 'recommendation.reopened', $3::jsonb, $4)`,
+          [tenantId, id, JSON.stringify({ via: 'undo' }), actor],
+        );
+        return { record: toRecord(id, nextProps), outcome, deduped: false };
+      }
+      return { record: toRecord(id, props), outcome, deduped: true };
+    });
+  }
+
+  /** P2/S4: the append-only action_log for a recommendation (what its approval did). */
+  async getActionLog(tenantId: string, id: string): Promise<ActionLogRecord[]> {
+    return withTenant(tenantId, async (c) => {
+      const res = await c.query<{
+        id: string; recommendation_id: string; action_type: string; result: string; risk_tier: string | null;
+        actor: string | null; target_object_id: string | null; created_object_id: string | null;
+        undoable: boolean; undo_of: string | null; created_at: string;
+      }>(
+        `SELECT id, recommendation_id, action_type, result, risk_tier, actor, target_object_id,
+                created_object_id, undoable, undo_of, created_at
+           FROM action_log WHERE recommendation_id = $1 ORDER BY created_at ASC`,
+        [id],
+      );
+      return res.rows.map((r) => ({
+        id: r.id,
+        recommendationId: r.recommendation_id,
+        actionType: r.action_type,
+        result: r.result as ActionLogRecord['result'],
+        ...(r.risk_tier ? { riskTier: r.risk_tier as ActionLogRecord['riskTier'] } : {}),
+        ...(r.actor ? { actor: r.actor } : {}),
+        targetObjectId: r.target_object_id,
+        createdObjectId: r.created_object_id,
+        undoable: r.undoable,
+        ...(r.undo_of ? { undoOf: r.undo_of } : {}),
+        at: new Date(r.created_at).toISOString(),
+      }));
     });
   }
 
@@ -234,5 +362,8 @@ function toRecord(id: string, p: Record<string, unknown>): RecommendationRecord 
     status: (p.status as RecommendationRecord['status']) ?? 'open',
     objectId: String(p.objectId ?? ''),
     ...(typeof p.tradeoff === 'string' ? { tradeoff: p.tradeoff } : {}),
+    ...(p.execution && typeof p.execution === 'object'
+      ? { execution: p.execution as RecommendationRecord['execution'] }
+      : {}),
   };
 }

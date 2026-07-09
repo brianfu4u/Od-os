@@ -93,7 +93,7 @@ export class StaffAgent implements DomainAgent {
         why: 'Task is past its due time and not yet verified.',
         evidence: [{ kind: 'alert', ref: ctx.alert?.id, note: 'overdue' }],
         confidence: 0.7,
-        proposedActions: [{ label: 'Reassign staff', actionType: 'reassign', riskTier: 'low', needsApproval: true }],
+        proposedActions: [{ label: 'Reassign task', actionType: 'reassign_task', riskTier: 'low', needsApproval: true }],
         objectId: ctx.object.id,
         addresses: ctx.alert?.id,
         severity: 'medium',
@@ -120,7 +120,7 @@ export class InventoryAgent implements DomainAgent {
         why: `On hand ${onHand} ≤ reorder point ${reorderPoint}.`,
         evidence: [{ kind: 'inventory', ref: ctx.object.id, note: `onHand=${onHand} reorderPoint=${reorderPoint}` }],
         confidence: 0.8,
-        proposedActions: [{ label: 'Create reorder', actionType: 'reorder', riskTier: 'low', needsApproval: true }],
+        proposedActions: [{ label: 'Create reorder task', actionType: 'inventory_reorder', riskTier: 'low', needsApproval: true }],
         objectId: ctx.object.id,
         severity: onHand === 0 ? 'high' : 'medium',
       },
@@ -168,7 +168,12 @@ export class FinancialAgent implements DomainAgent {
           why: `Payer will deny/hold: required field(s) missing — ${missing.join(', ')}.`,
           evidence: [{ kind: 'claim', ref: ctx.object.id, note: `missing: ${missing.join(', ')}` }],
           confidence: 0.9,
-          proposedActions: [{ label: 'Request missing info', actionType: 'request_info', riskTier: 'low', needsApproval: false }],
+          // request_info is an internal nudge (records intent); submit_claim is an EXTERNAL side
+          // effect → high risk, never auto-executed (proves the whitelist gate).
+          proposedActions: [
+            { label: 'Request missing info', actionType: 'request_info', riskTier: 'low', needsApproval: false },
+            { label: 'Submit claim to payer', actionType: 'submit_claim', riskTier: 'high', needsApproval: true },
+          ],
           objectId: ctx.object.id,
           severity: 'high',
         });
@@ -202,9 +207,11 @@ export class MarketingAgent implements DomainAgent {
           why: 'Negative review is past the response SLA; unanswered reviews compound reputation risk.',
           evidence: [{ kind: 'review', ref: ctx.object.id, note: `rating ${rating}, age ${Math.round(ageMin)}m` }],
           confidence: 0.85,
+          // flag_review_followup creates an INTERNAL follow-up task (whitelisted); publicly replying
+          // to the reviewer is an EXTERNAL side effect → high risk, never auto-executed.
           proposedActions: [
-            { label: 'Draft reply', actionType: 'draft_reply', riskTier: 'low', needsApproval: true },
-            { label: 'Assign owner', actionType: 'assign', riskTier: 'low', needsApproval: true },
+            { label: 'Create follow-up task', actionType: 'flag_review_followup', riskTier: 'low', needsApproval: true },
+            { label: 'Publicly reply to reviewer', actionType: 'send_review_reply', riskTier: 'high', needsApproval: true },
           ],
           objectId: ctx.object.id,
           severity: 'high',
@@ -259,7 +266,7 @@ export class EquipmentAgent implements DomainAgent {
           why: `Device was scanned in use ${days}d past its ${validDays}d calibration window; results may be invalid.`,
           evidence: [{ kind: 'equipment', ref: ctx.object.id, note: `calibrated ${days}d ago; used via QR scan` }],
           confidence: 0.9,
-          proposedActions: [{ label: 'Block device · route to backup', actionType: 'block_device', riskTier: 'low', needsApproval: true }],
+          proposedActions: [{ label: 'Set device offline · create calibration task', actionType: 'equipment_offline', riskTier: 'low', needsApproval: true }],
           objectId: ctx.object.id,
           severity: 'high',
           impact: 2,
