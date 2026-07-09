@@ -7,6 +7,7 @@ import {
   fetchMe,
   loadToken,
   managerDevLogin,
+  managerStagingLogin,
   saveToken,
   serverLogout,
   type Session,
@@ -19,6 +20,8 @@ interface SessionContextValue {
   ready: boolean;
   storageAvailable: boolean;
   login: (tenantId: string, login: string, displayName?: string) => Promise<void>;
+  /** P5 staging: password-gated manager login (tenant decided server-side). */
+  stagingLogin: (password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -55,6 +58,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setSession(s);
   }, []);
 
+  const stagingLogin = useCallback(async (password: string) => {
+    const s = await managerStagingLogin(password);
+    saveToken(s.token);
+    setSession(s);
+  }, []);
+
   const logout = useCallback(async () => {
     const current = session;
     setSession(null);
@@ -63,8 +72,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [session]);
 
   const value = useMemo<SessionContextValue>(
-    () => ({ session, ready, storageAvailable, login, logout }),
-    [session, ready, storageAvailable, login, logout],
+    () => ({ session, ready, storageAvailable, login, stagingLogin, logout }),
+    [session, ready, storageAvailable, login, stagingLogin, logout],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

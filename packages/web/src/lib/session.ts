@@ -45,6 +45,17 @@ export async function managerDevLogin(tenantId: string, login: string, displayNa
   return data;
 }
 
+/** Minimal-secure STAGING login → issues a manager session (tenant comes from the server env). */
+export async function managerStagingLogin(password: string): Promise<Session> {
+  const res = await fetch(`${API_BASE}/auth/manager/staging-login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  });
+  if (!res.ok) throw new Error(await readError(res));
+  return (await res.json()) as Session;
+}
+
 /** Resolve the identity for a token (validates the stored session on reload). */
 export async function fetchMe(token: string): Promise<SessionIdentity | null> {
   try {

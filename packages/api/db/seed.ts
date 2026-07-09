@@ -6,7 +6,7 @@
  */
 import { Client } from 'pg';
 import type { MvpTaskType } from '@clearview/shared';
-import { requireDatabaseUrl } from './env';
+import { clientConfig } from './env';
 
 const TENANT_A = '11111111-1111-1111-1111-111111111111';
 const TENANT_B = '22222222-2222-2222-2222-222222222222';
@@ -284,8 +284,7 @@ async function seedTenantB(client: Client): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const connectionString = requireDatabaseUrl();
-  const client = new Client({ connectionString });
+  const client = new Client(clientConfig());
   await client.connect();
   try {
     console.log('↺ truncating ontology tables …');

@@ -212,7 +212,10 @@
     "signIn": "サインイン",
     "signingIn": "サインイン中…",
     "devNote": "開発:P1 セッションのモック管理者ログイン(dev-gated、本番は404)。セッションがテナントを決定し、リクエストは Bearer、SSE は ?session= を使用。本番はメールのマジックリンク/SSO。",
-    "storageWarning": "ローカルストレージが利用できません:ログイン状態は保持されません(動作は継続します)。"
+    "storageWarning": "ローカルストレージが利用できません:ログイン状態は保持されません(動作は継続します)。",
+    "password": "パスワード",
+    "stagingSubtitle": "Staging:マネージャーのパスワードで入場(合成データ)。",
+    "stagingNote": "Staging は単一の共有パスワード(サーバ env で制御、本番では無認証 dev-login は無効)。合成データのみ。"
   },
   "shell": {
     "tag": "管理者",

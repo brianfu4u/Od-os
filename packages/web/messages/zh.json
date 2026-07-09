@@ -203,7 +203,10 @@
     "signIn": "登录",
     "signingIn": "登录中…",
     "devNote": "开发环境:经 P1 会话的模拟经理登录(dev-gated,生产返回 404)。会话驱动租户,请求带 Bearer,SSE 用 ?session=;生产改用邮箱魔法链接 / SSO。",
-    "storageWarning": "本地存储不可用:登录状态不会被记住(应用仍可正常使用)。"
+    "storageWarning": "本地存储不可用:登录状态不会被记住(应用仍可正常使用)。",
+    "password": "登录口令",
+    "stagingSubtitle": "Staging 环境:输入经理登录口令进入(合成数据)。",
+    "stagingNote": "Staging 用单一口令登录(服务端 env 控制,生产不放开无鉴权 dev-login);仅合成数据。"
   },
   "shell": {
     "tag": "管理端",

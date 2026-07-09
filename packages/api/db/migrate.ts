@@ -6,16 +6,15 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Client } from 'pg';
-import { requireDatabaseUrl } from './env';
+import { clientConfig } from './env';
 
 async function main(): Promise<void> {
-  const connectionString = requireDatabaseUrl();
   const dir = resolve(process.cwd(), 'db', 'migrations');
   const files = readdirSync(dir)
     .filter((f) => f.endsWith('.sql'))
     .sort();
 
-  const client = new Client({ connectionString });
+  const client = new Client(clientConfig());
   await client.connect();
   try {
     await client.query(`

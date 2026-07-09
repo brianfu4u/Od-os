@@ -23,4 +23,8 @@ ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /app/deploy ./
 EXPOSE 3001
+# Container-level liveness (Render also uses healthCheckPath: /health). Uses Node 22's global fetch.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||process.env.API_PORT||3001)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+# Migrations run as a Render pre-deploy (node db/migrate.mjs); the app runs as clearview_login.
 CMD ["node", "dist/main.js"]

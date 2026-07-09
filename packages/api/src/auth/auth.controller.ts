@@ -11,6 +11,7 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
+import { timingSafeEqual } from 'node:crypto';
 import { SessionService } from './session.service';
 import { code2session, isWeChatConfigured } from './wechat';
 import { isUuid, TenantGuard, extractSessionToken, type TenantRequest } from '../tenant/tenant.guard';
@@ -90,6 +91,33 @@ export class AuthController {
       login: body.login,
       displayName: body.displayName,
       role: body.role,
+    });
+    setSessionCookie(res, token, 12 * 3600);
+    return { token, identity };
+  }
+
+  /**
+   * P5 STAGING manager login — minimal + secure, for a public synthetic-data staging env. It is
+   * NOT the wide-open dev-login (that stays 404 in production). Gated by STAGING_LOGIN_ENABLED +
+   * a shared STAGING_LOGIN_PASSWORD (constant-time compare); the tenant comes from STAGING_TENANT_ID
+   * server-side, never the client. Absent the flag/password it 404s, so real prod never exposes it.
+   */
+  @Post('manager/staging-login')
+  async stagingManagerLogin(@Body() body: { password?: string }, @Res({ passthrough: true }) res: HttpResponse) {
+    const expected = process.env.STAGING_LOGIN_PASSWORD ?? '';
+    if (process.env.STAGING_LOGIN_ENABLED !== 'true' || expected.length === 0) throw new NotFoundException();
+    const provided = Buffer.from(typeof body?.password === 'string' ? body.password : '');
+    const want = Buffer.from(expected);
+    if (provided.length !== want.length || !timingSafeEqual(provided, want)) {
+      throw new UnauthorizedException('invalid staging password');
+    }
+    const tenantId = process.env.STAGING_TENANT_ID ?? '11111111-1111-1111-1111-111111111111';
+    if (!isUuid(tenantId)) throw new BadRequestException('STAGING_TENANT_ID must be a uuid');
+    const { token, identity } = await this.sessions.devLoginManager({
+      tenantId,
+      login: 'staging-manager',
+      displayName: 'Staging Manager',
+      role: 'manager',
     });
     setSessionCookie(res, token, 12 * 3600);
     return { token, identity };

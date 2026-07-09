@@ -1,6 +1,23 @@
-import { Pool } from 'pg';
+import { Pool, type PoolConfig } from 'pg';
 
 let pool: Pool | undefined;
+
+/**
+ * TLS for hosted Postgres (Neon / Supabase / Render all require SSL). Enabled automatically when the
+ * host is not local, or forced via DATABASE_SSL=true|false. `rejectUnauthorized:false` accepts the
+ * managed providers' certs (fine for a synthetic-data staging DB; tighten with a CA for real PHI).
+ */
+export function sslFor(connectionString: string): PoolConfig['ssl'] {
+  if (process.env.DATABASE_SSL === 'false') return undefined;
+  if (process.env.DATABASE_SSL === 'true') return { rejectUnauthorized: false };
+  try {
+    const host = new URL(connectionString).hostname;
+    const local = host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.local');
+    return local ? undefined : { rejectUnauthorized: false };
+  } catch {
+    return undefined;
+  }
+}
 
 /** Dev/CI default password for the derived clearview_login connection (see 0007 migration). */
 const DEV_LOGIN_PASSWORD = process.env.APP_DB_PASSWORD ?? 'clearview_login_dev';
@@ -42,7 +59,8 @@ function runtimeConnectionString(): string {
 /** Lazily-created shared connection pool. pg connects on first query, not here. */
 export function getPool(): Pool {
   if (!pool) {
-    pool = new Pool({ connectionString: runtimeConnectionString(), max: 10 });
+    const connectionString = runtimeConnectionString();
+    pool = new Pool({ connectionString, max: 10, ssl: sslFor(connectionString) });
   }
   return pool;
 }
