@@ -43,6 +43,20 @@ export class VerificationService {
     return outcome.result;
   }
 
+  /** P4/S8: human verdict correction — updates state, appends ledger, captures learning feedback. */
+  async correct(
+    tenantId: string,
+    objectId: string,
+    toState: string,
+    reason: string,
+  ): Promise<{ objectId: string; fromState: string | null; toState: string } | null> {
+    const res = await this.repo.correctVerdict(tenantId, objectId, toState, reason);
+    if (res) {
+      this.realtime.publish({ kind: 'verified', tenantId, objectId, type: 'Task', at: new Date().toISOString() });
+    }
+    return res;
+  }
+
   /** Time-based sweep: re-verify not-yet-verified Tasks so overdue/missing triggers fire. */
   async sweep(tenantId: string): Promise<{ swept: number }> {
     const ids = await this.repo.findSweepCandidates(tenantId);
