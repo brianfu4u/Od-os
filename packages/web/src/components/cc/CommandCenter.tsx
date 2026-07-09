@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useLiveData } from '../../hooks/useLiveData';
+import { useSession } from '../session/SessionProvider';
 import { buildDomainTiles } from '../../lib/domain-model';
 import { API_BASE } from '../../lib/config';
 import { Podium, type PodiumKpis } from './Podium';
@@ -27,7 +28,10 @@ function useClock(): string {
 
 export function CommandCenter() {
   const t = useTranslations();
-  const { overview, recommendations, status, error, refresh, act } = useLiveData();
+  const { session } = useSession();
+  const { overview, recommendations, results, status, error, refresh, approve, undo, dismiss, snooze } = useLiveData(
+    session?.token ?? '',
+  );
   const clock = useClock();
 
   const tiles = useMemo(() => buildDomainTiles(overview, recommendations), [overview, recommendations]);
@@ -72,7 +76,14 @@ export function CommandCenter() {
           <DomainGrid tiles={tiles} />
 
           {/* MIDDLE — AI Co-Pilot cues */}
-          <CueFeed recs={recommendations} onAct={act} />
+          <CueFeed
+            recs={recommendations}
+            results={results}
+            onApprove={approve}
+            onUndo={undo}
+            onDismiss={dismiss}
+            onSnooze={snooze}
+          />
 
           {/* RIGHT — ledger + comms */}
           <div className="space-y-5">
