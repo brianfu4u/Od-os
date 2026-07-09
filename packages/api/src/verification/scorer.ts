@@ -76,9 +76,13 @@ export class DeterministicScorer implements Scorer {
 
     // S0-7: per-task base and per-kind weights. Defaults reproduce the §4 arithmetic (base 0.50).
     const base = input.baseSelfClaim ?? BASE_SELF_CLAIM;
+    // A per-kind multiplier: <1 down-weights, >1 UP-weights (P4/S8 learned weights use both
+    // directions, bounded to ≤2). The per-item contribution is still capped at strength≤1 below via
+    // clamp01(strength × weight), so no single item can exceed a full-strength signal; a
+    // contradiction is never down-weighted. 1.0 = neutral (pre-S0-7 behavior).
     const weightFor = (type: string): number => {
       const w = input.weights?.[type];
-      return typeof w === 'number' && Number.isFinite(w) ? clamp01(w) : 1;
+      return typeof w === 'number' && Number.isFinite(w) ? Math.max(0, Math.min(3, w)) : 1;
     };
 
     let confidence = input.claimPresent && input.claimMatchesExpected ? clamp01(base) : 0;
