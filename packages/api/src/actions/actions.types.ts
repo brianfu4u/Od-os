@@ -25,8 +25,12 @@ export interface ActionContext {
   now: number;
 }
 
-/** What applying a write-back produced — captured verbatim into the append-only action_log. */
-export interface WritebackResult {
+/**
+ * The planned effect of a write-back — computed WITHOUT writing (any created object id is
+ * pre-generated here). Recorded verbatim into the action_log slot BEFORE the side effects run,
+ * so claiming the idempotency slot and performing the effect are ordered (claim-first).
+ */
+export interface WritebackPlan {
   targetObjectId?: string | null;
   createdObjectId?: string | null;
   before: unknown;
@@ -56,11 +60,16 @@ export interface ActionHandler {
   describe(subject: ActionSubject): string;
   /**
    * Returns a reason string if the action CANNOT run against this subject (e.g. missing target),
-   * or null if it can. Checked before `execute` so we log `not_executable` instead of aborting.
+   * or null if it can. Checked before planning so we log `not_executable` instead of aborting.
    */
   canExecute(ctx: ActionContext): string | null;
-  /** Apply the write-back (only after `canExecute` returned null). */
-  execute(ctx: ActionContext): Promise<WritebackResult>;
+  /**
+   * Compute the planned effect WITHOUT writing (pre-generating any created object id). The executor
+   * records this into the action_log slot first; only if it wins the slot does it call `apply`.
+   */
+  plan(ctx: ActionContext): Promise<WritebackPlan>;
+  /** Perform the side effects for a previously-`plan`ned write-back (runs only after the slot is won). */
+  apply(ctx: ActionContext, plan: WritebackPlan): Promise<void>;
   /** Reverse a previously executed write-back, restoring the recorded before-state. */
   undo(ctx: ActionContext, log: ExecutedActionRow): Promise<void>;
 }
