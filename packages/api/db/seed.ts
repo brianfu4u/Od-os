@@ -290,7 +290,7 @@ async function main(): Promise<void> {
   try {
     console.log('↺ truncating ontology tables …');
     await client.query(
-      'TRUNCATE objects, links, events, verification_ledger RESTART IDENTITY CASCADE',
+      'TRUNCATE objects, links, events, verification_ledger, action_log RESTART IDENTITY CASCADE',
     );
     console.log('🌱 seeding tenant A (busy clinic) …');
     await seedTenantA(client);
