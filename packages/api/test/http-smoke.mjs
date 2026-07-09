@@ -69,6 +69,15 @@ export async function runHttpSmoke({
   const me = await meResp.json();
   check(me?.tenantId === tenant && me?.subject === 'staff', 'GET /auth/me returns the session identity');
 
+  // P5: the staging manager login is gated OFF by default (no STAGING_LOGIN_ENABLED) → 404, so it is
+  // never exposed unless explicitly turned on.
+  const stagingOff = await fetch(`${base}/auth/manager/staging-login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: 'anything' }),
+  });
+  check(stagingOff.status === 404, `staging-login is gated off by default → 404 (got ${stagingOff.status})`);
+
   const tasks = await (await fetch(`${base}/objects?type=Task`, { headers: H })).json();
   check(Array.isArray(tasks) && tasks.length >= 1, `GET /objects?type=Task → ${tasks.length} task(s)`);
 
