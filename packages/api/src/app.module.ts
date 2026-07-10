@@ -11,6 +11,7 @@ import { VerificationModule } from './verification/verification.module';
 import { RecommendationModule } from './recommendations/recommendation.module';
 import { OverviewModule } from './overview/overview.module';
 import { LearningModule } from './learning/learning.module';
+import { ListenerModule } from './listener/listener.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { LearningModule } from './learning/learning.module';
     VerificationModule,
     RecommendationModule,
     OverviewModule,
+    ListenerModule,
   ],
   controllers: [HealthController],
 })
