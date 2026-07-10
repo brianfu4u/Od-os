@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, Optional } from '@nestjs/common';
-import type { ActionLogRecord, OperatingTempo, RecommendationRecord, RecommendationStatus } from '@clearview/shared';
+import type { ActionLogRecord, OperatingTempo, RecommendationCandidate, RecommendationRecord, RecommendationStatus } from '@clearview/shared';
 import { RealtimeService } from '../objects/realtime.service';
 import { DomainEventBus } from '../events/domain-event-bus';
 import type { ExecutionOutcome } from '../actions/actions.types';
@@ -56,6 +56,23 @@ export class RecommendationService {
     if (candidates.length === 0) return [];
     const penalties = await this.learning.getDomainPriorityPenalties(tenantId);
     const ranked = this.orchestrator.orchestrate(candidates, 25, penalties);
+    const created = await this.repo.persist(tenantId, ranked);
+    for (const id of created) {
+      this.realtime.publish({ kind: 'created', tenantId, objectId: id, type: 'Recommendation', at: new Date().toISOString() });
+    }
+    return created;
+  }
+
+  /**
+   * Ingest externally-sourced candidate cues (e.g. from LLM1's Listen layer) THROUGH the same
+   * deterministic orchestrator the domain agents use — dedup / de-conflict / rank / cap / persist.
+   * This keeps the moat clean: an LLM may PROPOSE cues, but the deterministic conductor decides
+   * what reaches the manager, and every surviving cue is still human-in-the-loop.
+   */
+  async ingestCandidates(tenantId: string, candidates: RecommendationCandidate[]): Promise<string[]> {
+    if (!candidates || candidates.length === 0) return [];
+    const penalties = await this.learning.getDomainPriorityPenalties(tenantId);
+    const ranked = this.orchestrator.orchestrate(candidates, 5, penalties);
     const created = await this.repo.persist(tenantId, ranked);
     for (const id of created) {
       this.realtime.publish({ kind: 'created', tenantId, objectId: id, type: 'Recommendation', at: new Date().toISOString() });
