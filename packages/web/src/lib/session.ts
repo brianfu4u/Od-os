@@ -1,13 +1,16 @@
 /**
- * Manager session for the command center (P3). Wraps the P1 auth endpoints. In dev/local we sign in
- * via the NODE_ENV-gated mock `/auth/manager/dev-login` (404 in prod); production replaces this with
- * a real magic-link / SSO login (TODO). The session TOKEN drives the tenant — the client never sends
- * a self-reported tenant for data. The token is persisted through the never-throws safe-storage.
+ * Sessions for the web clients. Wraps the P1 auth endpoints. In dev/local we sign in via the
+ * NODE_ENV-gated mock logins (404 in prod); on staging (NODE_ENV=production) we use the env-gated,
+ * password-protected staging logins. The session TOKEN drives the tenant — the client never sends a
+ * self-reported tenant for data. Tokens persist through the never-throws safe-storage. The manager
+ * (command center) and staff (terminal) tokens use SEPARATE keys so both can be used in one browser.
  */
 import { API_BASE } from './config';
 import { safeStorage } from './safe-storage';
 
 export const SESSION_KEY = 'cv_session_token';
+/** T1: the staff terminal persists its session separately from the manager's. */
+export const STAFF_SESSION_KEY = 'cv_staff_token';
 
 export interface SessionIdentity {
   subject: 'staff' | 'manager' | 'dev';
@@ -33,30 +36,37 @@ async function readError(res: Response): Promise<string> {
   return res.statusText || `HTTP ${res.status}`;
 }
 
-/** Dev-gated mock manager login → issues a session bound to {tenant, role}. */
-export async function managerDevLogin(tenantId: string, login: string, displayName?: string): Promise<Session> {
-  const res = await fetch(`${API_BASE}/auth/manager/dev-login`, {
+async function post(path: string, payload: Record<string, unknown>): Promise<Session> {
+  const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tenantId, login, displayName }),
-  });
-  if (!res.ok) throw new Error(await readError(res));
-  const data = (await res.json()) as Session;
-  return data;
-}
-
-/** Minimal-secure STAGING login → issues a manager session (tenant comes from the server env). */
-export async function managerStagingLogin(password: string): Promise<Session> {
-  const res = await fetch(`${API_BASE}/auth/manager/staging-login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error(await readError(res));
   return (await res.json()) as Session;
 }
 
-/** Resolve the identity for a token (validates the stored session on reload). */
+// ── Manager (command center) ────────────────────────────────────────────────
+/** Dev-gated mock manager login → issues a session bound to {tenant, role}. */
+export function managerDevLogin(tenantId: string, login: string, displayName?: string): Promise<Session> {
+  return post('/auth/manager/dev-login', { tenantId, login, displayName });
+}
+/** Minimal-secure STAGING manager login (tenant comes from the server env). */
+export function managerStagingLogin(password: string): Promise<Session> {
+  return post('/auth/manager/staging-login', { password });
+}
+
+// ── Staff (terminal) — T1 ─────────────────────────────────────────────────────
+/** Dev-gated mock staff login → issues a staff session bound to {tenant, staff}. */
+export function staffDevLogin(tenantId: string, handle: string, displayName?: string): Promise<Session> {
+  return post('/auth/staff/dev-login', { tenantId, handle, displayName });
+}
+/** STAGING staff login (password-gated); tenant from server env, staff provisioned by handle. */
+export function staffStagingLogin(password: string, handle: string, displayName?: string): Promise<Session> {
+  return post('/auth/staff/staging-login', { password, handle, displayName });
+}
+
+/** Resolve the identity for a token (validates a stored session on reload). */
 export async function fetchMe(token: string): Promise<SessionIdentity | null> {
   try {
     const res = await fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
@@ -75,6 +85,7 @@ export async function serverLogout(token: string): Promise<void> {
   }
 }
 
+// Manager token helpers (command center).
 export function loadToken(): string | null {
   return safeStorage.get(SESSION_KEY);
 }
@@ -83,4 +94,15 @@ export function saveToken(token: string): void {
 }
 export function clearToken(): void {
   safeStorage.remove(SESSION_KEY);
+}
+
+// Staff token helpers (terminal).
+export function loadStaffToken(): string | null {
+  return safeStorage.get(STAFF_SESSION_KEY);
+}
+export function saveStaffToken(token: string): void {
+  safeStorage.set(STAFF_SESSION_KEY, token);
+}
+export function clearStaffToken(): void {
+  safeStorage.remove(STAFF_SESSION_KEY);
 }
