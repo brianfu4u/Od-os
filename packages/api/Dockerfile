@@ -14,9 +14,13 @@ RUN pnpm install --frozen-lockfile --filter @clearview/api...
 # Build shared → api, then produce a self-contained deploy bundle.
 COPY packages/shared packages/shared
 COPY packages/api packages/api
+# NOTE: pnpm v10 changed `pnpm deploy` to only work on workspaces with
+# inject-workspace-packages=true, erroring with ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE
+# otherwise. This monorepo does not inject, so pass --legacy to keep the pnpm-9
+# bundling behavior (produces a self-contained /app/deploy with @clearview/shared).
 RUN pnpm --filter @clearview/shared build \
   && pnpm --filter @clearview/api build \
-  && pnpm --filter @clearview/api deploy --prod /app/deploy
+  && pnpm --filter @clearview/api deploy --prod --legacy /app/deploy
 
 FROM base AS runtime
 ENV NODE_ENV=production
