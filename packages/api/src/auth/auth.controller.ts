@@ -34,6 +34,25 @@ function setSessionCookie(res: HttpResponse, token: string, maxAgeSec: number): 
 }
 
 /**
+ * P5/T1 STAGING login gate: shared with the manager + staff staging logins. Enabled only when
+ * STAGING_LOGIN_ENABLED=true and a STAGING_LOGIN_PASSWORD is set; compares in constant time.
+ * Returns the server-side staging tenant. Absent the flag/password it throws NotFound, so a real
+ * prod deployment (which sets neither) never exposes these endpoints.
+ */
+function assertStagingPassword(password: unknown): string {
+  const expected = process.env.STAGING_LOGIN_PASSWORD ?? '';
+  if (process.env.STAGING_LOGIN_ENABLED !== 'true' || expected.length === 0) throw new NotFoundException();
+  const provided = Buffer.from(typeof password === 'string' ? password : '');
+  const want = Buffer.from(expected);
+  if (provided.length !== want.length || !timingSafeEqual(provided, want)) {
+    throw new UnauthorizedException('invalid staging password');
+  }
+  const tenantId = process.env.STAGING_TENANT_ID ?? '11111111-1111-1111-1111-111111111111';
+  if (!isUuid(tenantId)) throw new BadRequestException('STAGING_TENANT_ID must be a uuid');
+  return tenantId;
+}
+
+/**
  * Session issuance. Staff authenticate via WeChat (wx.login → code2session → openid → session);
  * managers via a login. The dev-login endpoints are the NODE_ENV-gated mock of that flow for
  * local/CI synthetic data — they 404 in production. No endpoint here trusts a client-supplied
@@ -77,6 +96,29 @@ export class AuthController {
     return { token, identity };
   }
 
+  /**
+   * T1 STAGING staff login — the staff counterpart to the manager staging login. Same env-gated,
+   * password-protected mechanism (NOT the wide-open dev-login, which stays 404 in prod). Lets a
+   * phone terminal obtain a real staff session on staging (NODE_ENV=production) so /reports and
+   * /uploads authenticate instead of 401ing on the dev X-Tenant-Id shim. Tenant is server-side;
+   * the staff is provisioned/looked-up by `handle` within that tenant.
+   */
+  @Post('staff/staging-login')
+  async stagingStaffLogin(
+    @Body() body: { password?: string; handle?: string; displayName?: string },
+    @Res({ passthrough: true }) res: HttpResponse,
+  ) {
+    const tenantId = assertStagingPassword(body?.password);
+    const handle = typeof body?.handle === 'string' && body.handle.trim().length > 0 ? body.handle.trim() : 'staff';
+    const { token, identity } = await this.sessions.devLoginStaff({
+      tenantId,
+      handle,
+      displayName: body?.displayName,
+    });
+    setSessionCookie(res, token, 12 * 3600);
+    return { token, identity };
+  }
+
   /** DEV-ONLY mock manager login. 404 in production. Prod manager login (magic link/SSO) = TODO. */
   @Post('manager/dev-login')
   async devManagerLogin(
@@ -104,15 +146,7 @@ export class AuthController {
    */
   @Post('manager/staging-login')
   async stagingManagerLogin(@Body() body: { password?: string }, @Res({ passthrough: true }) res: HttpResponse) {
-    const expected = process.env.STAGING_LOGIN_PASSWORD ?? '';
-    if (process.env.STAGING_LOGIN_ENABLED !== 'true' || expected.length === 0) throw new NotFoundException();
-    const provided = Buffer.from(typeof body?.password === 'string' ? body.password : '');
-    const want = Buffer.from(expected);
-    if (provided.length !== want.length || !timingSafeEqual(provided, want)) {
-      throw new UnauthorizedException('invalid staging password');
-    }
-    const tenantId = process.env.STAGING_TENANT_ID ?? '11111111-1111-1111-1111-111111111111';
-    if (!isUuid(tenantId)) throw new BadRequestException('STAGING_TENANT_ID must be a uuid');
+    const tenantId = assertStagingPassword(body?.password);
     const { token, identity } = await this.sessions.devLoginManager({
       tenantId,
       login: 'staging-manager',
