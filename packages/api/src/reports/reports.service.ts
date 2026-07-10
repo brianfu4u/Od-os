@@ -2,6 +2,7 @@ import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/commo
 import type { StaffReportInput, StaffReportResult } from '@clearview/shared';
 import { ReportsRepository } from './reports.repository';
 import { RealtimeService } from '../objects/realtime.service';
+import { DomainEventBus } from '../events/domain-event-bus';
 import { VERIFICATION_HOOK, type VerificationHook } from '../verification/verification.hook';
 import { validateReportInput } from './reports.validation';
 import type { SessionIdentity } from '../auth/session.types';
@@ -12,6 +13,7 @@ export class ReportsService {
     private readonly repo: ReportsRepository,
     private readonly realtime: RealtimeService,
     @Optional() @Inject(VERIFICATION_HOOK) private readonly verification?: VerificationHook,
+    @Optional() private readonly bus?: DomainEventBus,
   ) {}
 
   async ingest(tenantId: string, input: StaffReportInput, identity: SessionIdentity): Promise<StaffReportResult> {
@@ -40,6 +42,15 @@ export class ReportsService {
           }
         }
       }
+      // LLM1 «Listen» layer: fan the committed report onto the domain event bus for async semantic
+      // analysis (classify + extract claim + suggest). The listener schedules work and returns
+      // immediately, so report ingestion is never blocked by an LLM call.
+      await this.bus?.publish({
+        type: 'report.received',
+        tenantId,
+        objectId: result.communicationId,
+        payload: { reportType: input.reportType },
+      });
     }
     return result;
   }
