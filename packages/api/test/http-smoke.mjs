@@ -167,6 +167,21 @@ export async function runHttpSmoke({
     check(!openAfter.some((r) => r.id === cue.id), 'approved cue left the open feed');
   }
 
+  // ── LLM1 «Listen» layer: the report was analyzed asynchronously (report.received → LLM1) ──
+  log('\nLLM1 listen layer:');
+  const commObj = await (await fetch(`${base}/objects/${report.communicationId}`, { headers: H })).json();
+  check(!!commObj?.properties?.llm?.classification, 'report auto-annotated by LLM1 (async, non-blocking)');
+  const ana = await (
+    await fetch(`${base}/listen/analyze`, {
+      method: 'POST',
+      headers: { ...H, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ communicationId: report.communicationId }),
+    })
+  ).json();
+  check(!!ana?.classification?.domain, 'POST /listen/analyze returns a classification');
+  const summary = await (await fetch(`${base}/listen/summary?hours=24`, { headers: H })).json();
+  check(typeof summary?.text === 'string' && (summary.count ?? 0) >= 1, `GET /listen/summary → ${summary?.count} events summarized`);
+
   // §4 resolution: upload the required snapshot → evidence hook re-verifies → verified.
   const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
   const form = new FormData();

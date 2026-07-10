@@ -11,5 +11,6 @@ import { RecommendationRepository } from './recommendation.repository';
   imports: [ObjectsModule, ActionsModule, LearningModule],
   controllers: [RecommendationController],
   providers: [RecommendationService, RecommendationRepository],
+  exports: [RecommendationService],
 })
 export class RecommendationModule {}
