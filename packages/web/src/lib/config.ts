@@ -8,11 +8,16 @@
  * API origin. Reads `NEXT_PUBLIC_API_BASE_URL` (the documented name in .env.example / deploy) and
  * falls back to the legacy `NEXT_PUBLIC_API_BASE`, then to the local dev API. (Both are accepted so
  * a staging deploy that sets `NEXT_PUBLIC_API_BASE_URL` actually points the browser at the API.)
+ *
+ * Trailing slashes are stripped so callers can safely build URLs as `${API_BASE}/auth/...`
+ * without producing a double slash (`//auth/...`), regardless of how the env var is set.
  */
-export const API_BASE =
+const RAW_API_BASE =
   (typeof process !== 'undefined' &&
     (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE)) ||
   'http://localhost:3001';
+
+export const API_BASE = RAW_API_BASE.replace(/\/+$/, '');
 
 /** Staging mode: the login form uses the password-gated staging login instead of the dev tenant picker. */
 export const IS_STAGING = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_STAGING === 'true';
