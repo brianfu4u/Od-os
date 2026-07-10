@@ -76,7 +76,16 @@ export async function runHttpSmoke({
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ password: 'anything' }),
   });
-  check(stagingOff.status === 404, `staging-login is gated off by default → 404 (got ${stagingOff.status})`);
+  check(stagingOff.status === 404, `manager staging-login is gated off by default → 404 (got ${stagingOff.status})`);
+
+  // T1: the staff terminal's staging login is env-gated the same way → 404 when disabled, so staging
+  // never exposes an unauthenticated staff login unless STAGING_LOGIN_ENABLED is explicitly set.
+  const staffStagingOff = await fetch(`${base}/auth/staff/staging-login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: 'anything', handle: 'nurse-a' }),
+  });
+  check(staffStagingOff.status === 404, `staff staging-login is gated off by default → 404 (got ${staffStagingOff.status})`);
 
   const tasks = await (await fetch(`${base}/objects?type=Task`, { headers: H })).json();
   check(Array.isArray(tasks) && tasks.length >= 1, `GET /objects?type=Task → ${tasks.length} task(s)`);
