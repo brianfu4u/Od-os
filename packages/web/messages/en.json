@@ -202,7 +202,32 @@
     "deduped": "deduped",
     "noFile": "Choose a file first.",
     "loadFailed": "Failed to load objects",
-    "devNote": "Dev: tenant travels via X-Tenant-Id; production uses a wx.login/openid session (S0-3) and never trusts a client-supplied identity."
+    "devNote": "Dev: tenant travels via X-Tenant-Id; production uses a wx.login/openid session (S0-3) and never trusts a client-supplied identity.",
+    "auth": {
+      "title": "Staff sign-in",
+      "devHint": "Dev: enter your name and clinic to enter (mock login).",
+      "stagingHint": "Staging: enter your name and the login password (synthetic data).",
+      "name": "Your name",
+      "password": "Password",
+      "tenant": "Clinic (tenant)",
+      "signIn": "Enter",
+      "signingIn": "Signing in…"
+    },
+    "who": "Signed in: {name}",
+    "logout": "Sign out",
+    "clock": {
+      "title": "Attendance",
+      "in": "Clock in",
+      "out": "Clock out",
+      "inAt": "Clocked in · {at}",
+      "outAt": "Clocked out · {at}",
+      "none": "Not clocked in yet today"
+    },
+    "camera": {
+      "take": "Take / choose photo",
+      "hint": "Snap a photo as evidence (opens the rear camera on phones); optionally linked to the subject.",
+      "chosen": "Chosen: {name}"
+    }
   },
   "login": {
     "title": "Manager sign-in",
