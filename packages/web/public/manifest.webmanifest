@@ -1,0 +1,12 @@
+{
+  "name": "Clearview OD",
+  "short_name": "Clearview",
+  "description": "Clearview OD staff terminal — report, clock in/out, and capture evidence.",
+  "start_url": "/zh/console",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "lang": "zh"
+}

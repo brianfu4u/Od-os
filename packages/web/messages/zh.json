@@ -193,7 +193,32 @@
     "deduped": "幂等去重",
     "noFile": "请先选择文件。",
     "loadFailed": "加载对象失败",
-    "devNote": "开发环境:租户经 X-Tenant-Id 传递;生产环境改用 wx.login/openid 会话(S0-3),绝不信任客户端身份。"
+    "devNote": "开发环境:租户经 X-Tenant-Id 传递;生产环境改用 wx.login/openid 会话(S0-3),绝不信任客户端身份。",
+    "auth": {
+      "title": "员工登录",
+      "devHint": "开发环境:输入姓名与诊所进入(模拟登录)。",
+      "stagingHint": "Staging:输入姓名与登录口令进入(合成数据)。",
+      "name": "你的名字",
+      "password": "登录口令",
+      "tenant": "诊所(租户)",
+      "signIn": "进入",
+      "signingIn": "登录中…"
+    },
+    "who": "当前:{name}",
+    "logout": "退出",
+    "clock": {
+      "title": "打卡",
+      "in": "上班打卡",
+      "out": "下班打卡",
+      "inAt": "已上班 · {at}",
+      "outAt": "已下班 · {at}",
+      "none": "今日尚未打卡"
+    },
+    "camera": {
+      "take": "拍照 / 选取照片",
+      "hint": "拍一张照片作为证据(手机将打开后置相机),可关联所选对象。",
+      "chosen": "已选:{name}"
+    }
   },
   "login": {
     "title": "管理端登录",
