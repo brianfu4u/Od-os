@@ -147,7 +147,9 @@ export function CameraScanner({
   useEffect(() => {
     void start();
     return () => stop();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Mount-only: start the camera once and stop it on unmount. `start`/`stop` are
+    // intentionally excluded so re-renders don't restart the camera stream.
+    // eslint-disable-next-line
   }, []);
 
   const submitManual = (e: React.FormEvent): void => {
