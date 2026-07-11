@@ -342,5 +342,15 @@
     "retry": "Retry",
     "transcribing": "transcribing",
     "hint": "Synthetic / demo audio only — never record real patient info. With no STT key the clip is still saved and the transcript is marked unavailable."
+  },
+  "mytasks": {
+    "title": "My tasks",
+    "subtitle": "Tasks assigned to me (verdict from cross-verification)",
+    "empty": "No tasks assigned to you",
+    "refresh": "Refresh",
+    "pick": "Use as subject & report",
+    "picked": "Picked as subject",
+    "loadFailed": "Failed to load my tasks",
+    "claimed": "claimed"
   }
 }

@@ -99,3 +99,23 @@ export interface ScanResolveResult {
   verifiedState: string | null;
   confidence: number | null;
 }
+
+/**
+ * T5 · "My tasks". A read-only projection of ONE Task assigned to the current staff (GET /tasks/mine).
+ * Tenant-scoped by RLS + filtered to the caller's own assignedTo links. The verdict is ONLY the
+ * Task's verified_state (S2, deterministic) — never derived from LLM/heuristics; null ⇒ unverified.
+ */
+export interface MyTaskSummary {
+  taskId: string;
+  taskType: string | null;
+  /** Human label: task label → linked Room label → taskType → 'Task'. */
+  label: string;
+  roomLabel: string | null;
+  expectedState: string | null;
+  claimedState: string | null;
+  /** The ONLY verdict source (deterministic S2). null ⇒ treat as unverified; never defaulted to verified. */
+  verifiedState: string | null;
+  confidence: number | null;
+  dueBy: string | null;
+  updatedAt: string;
+}

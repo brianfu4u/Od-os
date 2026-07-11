@@ -9,6 +9,7 @@
  */
 import type {
   ActionLogRecord,
+  MyTaskSummary,
   ObjectTimeline,
   OntologyObject,
   OverviewResult,
@@ -137,6 +138,14 @@ export function makeApi(auth?: string | ApiAuth) {
       return json(
         await fetch(`${API_BASE}/objects/resolve?code=${encodeURIComponent(code)}`, { headers: authHeaders(), signal }),
       );
+    },
+
+    /**
+     * T5 · read-only list of Tasks assigned to the current staff (session-scoped + RLS). The server
+     * resolves the caller's staff from the session; nothing here self-reports a staff id.
+     */
+    async myTasks(signal?: AbortSignal): Promise<MyTaskSummary[]> {
+      return json(await fetch(`${API_BASE}/tasks/mine`, { headers: authHeaders(), signal }));
     },
 
     /** P3 drill-down: an object's full story (object + events + verification ledger). */

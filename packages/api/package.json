@@ -29,7 +29,8 @@
     "test:listener": "tsx test/listener-integration.ts",
     "test:voice": "tsx test/voice-transcription-integration.ts",
     "test:scan": "tsx test/scan-resolve-integration.ts",
-    "test:integration": "pnpm run test:db-safety && pnpm run test:p31 && pnpm run test:objects && pnpm run test:reports && pnpm run test:uploads && pnpm run test:verification && pnpm run test:recommendations && pnpm run test:overview && pnpm run test:sweep && pnpm run test:actions && pnpm run test:learning && pnpm run test:listener && pnpm run test:voice && pnpm run test:scan && pnpm run test:session",
+    "test:mytasks": "tsx test/my-tasks-integration.ts",
+    "test:integration": "pnpm run test:db-safety && pnpm run test:p31 && pnpm run test:objects && pnpm run test:reports && pnpm run test:uploads && pnpm run test:verification && pnpm run test:recommendations && pnpm run test:overview && pnpm run test:sweep && pnpm run test:actions && pnpm run test:learning && pnpm run test:listener && pnpm run test:voice && pnpm run test:scan && pnpm run test:mytasks && pnpm run test:session",
     "test:http-smoke": "node test/http-smoke.mjs"
   },
   "dependencies": {

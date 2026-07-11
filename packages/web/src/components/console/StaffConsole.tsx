@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import type { StaffReportType } from '@clearview/shared';
+import type { MyTaskSummary, StaffReportType } from '@clearview/shared';
 import { makeApi, type Api } from '../../lib/api';
 import { hhmm, pct } from '../../lib/format';
 import { DEV_TENANTS, IS_STAGING } from '../../lib/config';
@@ -10,6 +10,7 @@ import { LocaleSwitcher } from '../LocaleSwitcher';
 import { safeStorage } from '../../lib/safe-storage';
 import { CameraScanner } from './CameraScanner';
 import { AudioRecorder } from './AudioRecorder';
+import { MyTasks } from './MyTasks';
 import {
   clearStaffToken,
   fetchMe,
@@ -194,6 +195,23 @@ export function StaffConsole() {
       }
     },
     [api, pushLog, t],
+  );
+
+  // T5 · pick a task from "My tasks" as the current subject, so report/photo/scan/recording target it.
+  const pickTask = useCallback(
+    (task: MyTaskSummary) => {
+      const row: ObjRow = {
+        id: task.taskId,
+        type: 'Task',
+        properties: { label: task.label, taskType: task.taskType ?? undefined },
+        verifiedState: task.verifiedState,
+        confidence: task.confidence,
+      };
+      setObjects((prev) => (prev.some((o) => o.id === row.id) ? prev : [row, ...prev]));
+      setSubjectId(task.taskId);
+      pushLog(true, `${t('mytasks.picked')}: ${task.label}`);
+    },
+    [pushLog, t],
   );
 
   async function clockPunch(type: 'clock_in' | 'clock_out'): Promise<void> {
@@ -441,6 +459,9 @@ export function StaffConsole() {
             </div>
           ) : null}
         </section>
+
+        {/* T5 · my tasks — the staff's assigned queue; pick one to make it the current subject */}
+        {api ? <MyTasks api={api} onPick={pickTask} /> : null}
 
         {/* report */}
         <form className={CARD} onSubmit={(e) => void submitReport(e)}>
