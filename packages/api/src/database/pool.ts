@@ -1,22 +1,18 @@
 import { Pool, type PoolConfig } from 'pg';
+import { resolveDbSsl } from '../config/security';
 
 let pool: Pool | undefined;
 
 /**
- * TLS for hosted Postgres (Neon / Supabase / Render all require SSL). Enabled automatically when the
- * host is not local, or forced via DATABASE_SSL=true|false. `rejectUnauthorized:false` accepts the
- * managed providers' certs (fine for a synthetic-data staging DB; tighten with a CA for real PHI).
+ * TLS for the runtime Postgres connection. Delegates to the hardened P5.1 resolver:
+ *  - production → FULL verification (rejectUnauthorized=true + CA from DATABASE_CA_CERT ⇒ verify-full);
+ *    the CA's presence is enforced fail-closed at boot by assertProductionSecurity().
+ *  - dev/test → off for localhost, or accept managed-provider certs for a hosted synthetic DB
+ *    (DATABASE_SSL toggles; a provided DATABASE_CA_CERT switches dev to verification too).
+ * There is deliberately no production path that yields rejectUnauthorized=false.
  */
 export function sslFor(connectionString: string): PoolConfig['ssl'] {
-  if (process.env.DATABASE_SSL === 'false') return undefined;
-  if (process.env.DATABASE_SSL === 'true') return { rejectUnauthorized: false };
-  try {
-    const host = new URL(connectionString).hostname;
-    const local = host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.local');
-    return local ? undefined : { rejectUnauthorized: false };
-  } catch {
-    return undefined;
-  }
+  return resolveDbSsl(connectionString);
 }
 
 /** Dev/CI default password for the derived clearview_login connection (see 0007 migration). */
