@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import type { StaffReportType } from '@clearview/shared';
+import type { MyTaskSummary, StaffReportType } from '@clearview/shared';
 import { makeApi, type Api } from '../../lib/api';
 import { hhmm, pct } from '../../lib/format';
 import { DEV_TENANTS, IS_STAGING } from '../../lib/config';
 import { LocaleSwitcher } from '../LocaleSwitcher';
 import { safeStorage } from '../../lib/safe-storage';
 import { CameraScanner } from './CameraScanner';
+import { AudioRecorder } from './AudioRecorder';
+import { MyTasks } from './MyTasks';
 import {
   clearStaffToken,
   fetchMe,
@@ -198,6 +200,23 @@ export function StaffConsole() {
     [api, pushLog, t],
   );
 
+  // T5 · pick a task from "My tasks" as the current subject, so report/photo/scan/recording target it.
+  const pickTask = useCallback(
+    (task: MyTaskSummary) => {
+      const row: ObjRow = {
+        id: task.taskId,
+        type: 'Task',
+        properties: { label: task.label, taskType: task.taskType ?? undefined },
+        verifiedState: task.verifiedState,
+        confidence: task.confidence,
+      };
+      setObjects((prev) => (prev.some((o) => o.id === row.id) ? prev : [row, ...prev]));
+      setSubjectId(task.taskId);
+      pushLog(true, `${t('mytasks.picked')}: ${task.label}`);
+    },
+    [pushLog, t],
+  );
+
   async function clockPunch(type: 'clock_in' | 'clock_out'): Promise<void> {
     if (!api) return;
     setBusy(true);
@@ -292,6 +311,22 @@ export function StaffConsole() {
       await loadObjects();
     } catch (e) {
       pushLog(false, `${t('console.upload')}: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // T3 · upload a recorded audio blob as voice evidence — reuses the T4 pipeline (STT → claim →
+  // LLM1). Linked to the current subject when set, so it also attaches as evidence to that object.
+  async function submitRecording(file: File): Promise<void> {
+    if (!api) return;
+    setBusy(true);
+    try {
+      const res = await api.upload(file, { kind: 'voice', linkTo: subject ? subject.id : undefined });
+      pushLog(true, `${t('rec.title')} → ${res.deduped ? t('console.deduped') : t('console.created')} ${res.objectId.slice(0, 8)} · ${t('rec.transcribing')}`);
+      await loadObjects();
+    } catch (e) {
+      pushLog(false, `${t('rec.title')}: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setBusy(false);
     }
@@ -461,6 +496,9 @@ export function StaffConsole() {
           ) : null}
         </section>
 
+        {/* T5 · my tasks — the staff's assigned queue; pick one to make it the current subject */}
+        {api ? <MyTasks api={api} onPick={pickTask} /> : null}
+
         {/* report */}
         <form className={CARD} onSubmit={(e) => void submitReport(e)}>
           <h2 className="text-sm font-semibold">{t('console.reportCard')}</h2>
@@ -541,6 +579,15 @@ export function StaffConsole() {
             </button>
           </div>
         </form>
+
+        {/* live audio recording — real mic; transcribes via the existing STT pipeline (T4) */}
+        <section className={CARD}>
+          <h2 className="text-sm font-semibold">{t('rec.card')}</h2>
+          <p className="mt-1 text-xs text-slate-500">{t('rec.cardHint')}</p>
+          <div className="mt-3">
+            <AudioRecorder onComplete={(f) => void submitRecording(f)} disabled={busy} />
+          </div>
+        </section>
 
         {/* activity */}
         <section className={CARD}>
