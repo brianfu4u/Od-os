@@ -19,8 +19,21 @@ const RAW_API_BASE =
 
 export const API_BASE = RAW_API_BASE.replace(/\/+$/, '');
 
+/** True in a production build. Used to force dev-only shims off regardless of any NEXT_PUBLIC flag. */
+export const IS_PRODUCTION = typeof process !== 'undefined' && process.env.NODE_ENV === 'production';
+
 /** Staging mode: the login form uses the password-gated staging login instead of the dev tenant picker. */
 export const IS_STAGING = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_STAGING === 'true';
+
+/**
+ * P7/T4 synthetic-transcript demo shim. When `NEXT_PUBLIC_STT_SYNTHETIC=true` (dev/staging only)
+ * the command center renders a few CLEARLY-LABELLED sample transcripts so the UI can be developed
+ * and demoed without a real STT key. It is FORCED off in production — real deployments only ever
+ * render real backend data, and no synthetic/placeholder text can leak. (No secret is involved: the
+ * STT key lives only on the backend; this is a pure display toggle.)
+ */
+export const STT_SYNTHETIC =
+  !IS_PRODUCTION && typeof process !== 'undefined' && process.env.NEXT_PUBLIC_STT_SYNTHETIC === 'true';
 
 /** Dev tenant — Tenant A from the seed (the Room-3 cross-verification story). */
 export const DEV_TENANT_ID =
