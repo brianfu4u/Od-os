@@ -36,6 +36,12 @@ export interface ApiAuth {
   tenantId?: string;
 }
 
+/** Result of POST /transcription/:id/retry (P7/T4). */
+export interface TranscriptionRetryResult {
+  objectId: string;
+  status: string;
+}
+
 function normalize(auth?: string | ApiAuth): ApiAuth {
   if (auth === undefined) return { tenantId: DEV_TENANT_ID };
   if (typeof auth === 'string') return { tenantId: auth };
@@ -146,6 +152,14 @@ export function makeApi(auth?: string | ApiAuth) {
 
     async verify(objectId: string): Promise<VerificationResult> {
       return json(await fetch(`${API_BASE}/objects/${objectId}/verify`, { method: 'POST', headers: authHeaders() }));
+    },
+
+    /**
+     * P7/T4: re-run STT for a voice evidence object (used by the failed/unavailable retry entry).
+     * Tenant-authed via the same session/dev shim; the STT key stays on the backend only.
+     */
+    async retryTranscription(objectId: string): Promise<TranscriptionRetryResult> {
+      return json(await fetch(`${API_BASE}/transcription/${objectId}/retry`, { method: 'POST', headers: authHeaders() }));
     },
   };
 }

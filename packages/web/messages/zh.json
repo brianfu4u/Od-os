@@ -267,5 +267,40 @@
     "selectPrompt": "选择一个对象,查看其事件与验证账本。",
     "ledger": "验证账本",
     "events": "事件"
+  },
+  "transcript": {
+    "title": "语音转写",
+    "subtitle": "语音证据 → 转写 → 主张 → 核实",
+    "listening": "STT 监听中",
+    "empty": "暂无语音转写。",
+    "status": {
+      "done": "已转写",
+      "low_confidence": "低置信",
+      "failed": "转写失败",
+      "unavailable": "未配置 STT",
+      "none": "转写中…"
+    },
+    "notApplied": "低置信 — 未作为主张采用",
+    "failedHint": "转写失败,可重试",
+    "unavailableHint": "未配置 STT,配置密钥后可重试",
+    "retry": "重试转写",
+    "retrying": "重试中…",
+    "retryFailed": "重试失败",
+    "provider": "服务商",
+    "model": "模型",
+    "language": "语言",
+    "sttConfidence": "STT 置信度",
+    "verifyConfidence": "核实置信度",
+    "claim": "系统听懂的主张(声称,未裁定)",
+    "verdict": "交叉验证判决(仅此为「已核实」来源)",
+    "noClaim": "未形成主张",
+    "noVerdict": "尚未核实",
+    "chain": {
+      "voice": "语音",
+      "claim": "主张",
+      "verdict": "判决"
+    },
+    "synthetic": "合成·演示",
+    "syntheticNote": "示例数据,非真实后端转写"
   }
 }

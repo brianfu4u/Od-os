@@ -12,6 +12,7 @@ import { DomainGrid } from './DomainGrid';
 import { CueFeed } from './CueFeed';
 import { LedgerPanel } from './LedgerPanel';
 import { CommsPanel } from './CommsPanel';
+import { TranscriptStream } from './TranscriptStream';
 
 function useClock(): string {
   const [now, setNow] = useState<Date | null>(null);
@@ -29,9 +30,8 @@ function useClock(): string {
 export function CommandCenter() {
   const t = useTranslations();
   const { session } = useSession();
-  const { overview, recommendations, results, status, error, refresh, approve, undo, dismiss, snooze } = useLiveData(
-    session?.token ?? '',
-  );
+  const { overview, recommendations, results, transcripts, status, error, refresh, approve, undo, dismiss, snooze, retryTranscription } =
+    useLiveData(session?.token ?? '');
   const clock = useClock();
 
   const tiles = useMemo(() => buildDomainTiles(overview, recommendations), [overview, recommendations]);
@@ -85,10 +85,11 @@ export function CommandCenter() {
             onSnooze={snooze}
           />
 
-          {/* RIGHT — ledger + comms */}
+          {/* RIGHT — ledger + comms + voice transcripts (STT «listen» layer, live) */}
           <div className="space-y-5">
             <LedgerPanel ledger={overview?.ledger ?? []} />
             <CommsPanel comms={overview?.comms ?? []} />
+            <TranscriptStream items={transcripts} onRetry={retryTranscription} />
           </div>
         </div>
 

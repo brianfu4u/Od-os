@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { OverviewResult, RecommendationRecord } from '@clearview/shared';
 import { makeApi } from '../lib/api';
+import { STT_SYNTHETIC } from '../lib/config';
+import { buildTranscriptFeed, type ObjectRow, type TranscriptFeedItem } from '../lib/transcript-model';
+import { syntheticFeedItems } from '../lib/synthetic-transcripts';
 
 export type FeedStatus = 'connecting' | 'live' | 'offline';
 
@@ -11,6 +14,8 @@ export interface LiveData {
   recommendations: RecommendationRecord[];
   /** Recently acted cues (approve/undo) this session, with their execution result. */
   results: RecommendationRecord[];
+  /** P7/T4: voice transcripts (voice → transcript → claim → verdict), newest first. */
+  transcripts: TranscriptFeedItem[];
   status: FeedStatus;
   lastEventAt: number | null;
   error: string | null;
@@ -19,20 +24,24 @@ export interface LiveData {
   undo: (id: string) => Promise<void>;
   dismiss: (id: string) => Promise<void>;
   snooze: (id: string) => Promise<void>;
+  /** Re-run STT for a voice object (used by the failed/unavailable retry entry). */
+  retryTranscription: (id: string) => Promise<void>;
 }
 
 /**
  * Wires the command center to the LIVE API using the manager SESSION token: initial load of the
- * overview aggregate + open recommendations, an EventSource on /objects/stream (?session=) that
- * debounces a refetch on every change and AUTO-RECONNECTS with capped backoff, and approve/undo/
- * dismiss/snooze. Approve/undo surface the execution result (executed / blocked / recorded / undone)
- * in `results`. All fetches run only in the browser, so the static prerender stays data-free.
+ * overview aggregate + open recommendations + voice transcripts, an EventSource on /objects/stream
+ * (?session=) that debounces a refetch on every change and AUTO-RECONNECTS with capped backoff, and
+ * approve/undo/dismiss/snooze + transcription retry. Because the SSE refetch reloads the transcript
+ * feed too, a transcript.completed/failed write (which changes the voice Document) flows into the UI
+ * live. All fetches run only in the browser, so the static prerender stays data-free.
  */
 export function useLiveData(token: string): LiveData {
   const api = useMemo(() => makeApi({ token }), [token]);
   const [overview, setOverview] = useState<OverviewResult | null>(null);
   const [recommendations, setRecommendations] = useState<RecommendationRecord[]>([]);
   const [results, setResults] = useState<RecommendationRecord[]>([]);
+  const [transcripts, setTranscripts] = useState<TranscriptFeedItem[]>([]);
   const [status, setStatus] = useState<FeedStatus>('connecting');
   const [error, setError] = useState<string | null>(null);
   const [lastEventAt, setLastEventAt] = useState<number | null>(null);
@@ -41,9 +50,20 @@ export function useLiveData(token: string): LiveData {
   const load = useCallback(
     async (signal?: AbortSignal) => {
       try {
-        const [ov, recs] = await Promise.all([api.overview(signal), api.recommendations('open', signal)]);
+        const [ov, recs, docs, tasks] = await Promise.all([
+          api.overview(signal),
+          api.recommendations('open', signal),
+          api.objects('Document', signal),
+          api.objects('Task', signal),
+        ]);
         setOverview(ov);
         setRecommendations(recs);
+        setTranscripts(
+          buildTranscriptFeed(docs as unknown as ObjectRow[], tasks as unknown as ObjectRow[], {
+            synthetic: STT_SYNTHETIC,
+            syntheticItems: STT_SYNTHETIC ? syntheticFeedItems() : undefined,
+          }),
+        );
         setError(null);
         setStatus((s) => (s === 'offline' ? 'live' : s));
       } catch (e) {
@@ -137,5 +157,27 @@ export function useLiveData(token: string): LiveData {
   const dismiss = useCallback((id: string) => remove(id, 'dismiss'), [remove]);
   const snooze = useCallback((id: string) => remove(id, 'snooze'), [remove]);
 
-  return { overview, recommendations, results, status, lastEventAt, error, refresh, approve, undo, dismiss, snooze };
+  const retryTranscription = useCallback(
+    async (id: string) => {
+      await api.retryTranscription(id);
+      void load();
+    },
+    [api, load],
+  );
+
+  return {
+    overview,
+    recommendations,
+    results,
+    transcripts,
+    status,
+    lastEventAt,
+    error,
+    refresh,
+    approve,
+    undo,
+    dismiss,
+    snooze,
+    retryTranscription,
+  };
 }
