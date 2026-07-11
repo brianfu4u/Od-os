@@ -276,5 +276,40 @@
     "selectPrompt": "Pick an object to see its events and verification ledger.",
     "ledger": "Verification ledger",
     "events": "Events"
+  },
+  "transcript": {
+    "title": "Voice Transcripts",
+    "subtitle": "Voice evidence → transcript → claim → verdict",
+    "listening": "STT listening",
+    "empty": "No voice transcripts yet.",
+    "status": {
+      "done": "Transcribed",
+      "low_confidence": "Low confidence",
+      "failed": "Transcription failed",
+      "unavailable": "STT not configured",
+      "none": "Transcribing…"
+    },
+    "notApplied": "Low confidence — not adopted as a claim",
+    "failedHint": "Transcription failed; you can retry",
+    "unavailableHint": "STT not configured; retry after a key is set",
+    "retry": "Retry transcription",
+    "retrying": "Retrying…",
+    "retryFailed": "Retry failed",
+    "provider": "Provider",
+    "model": "Model",
+    "language": "Language",
+    "sttConfidence": "STT confidence",
+    "verifyConfidence": "Verification confidence",
+    "claim": "What the system heard (a claim, not a verdict)",
+    "verdict": "Cross-verification verdict (the only \"verified\" source)",
+    "noClaim": "No claim formed",
+    "noVerdict": "Not yet verified",
+    "chain": {
+      "voice": "Voice",
+      "claim": "Claim",
+      "verdict": "Verdict"
+    },
+    "synthetic": "Synthetic · demo",
+    "syntheticNote": "Sample data, not a real backend transcript"
   }
 }

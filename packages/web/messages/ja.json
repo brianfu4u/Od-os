@@ -276,5 +276,40 @@
     "selectPrompt": "オブジェクトを選ぶとイベントと検証台帳が表示されます。",
     "ledger": "検証台帳",
     "events": "イベント"
+  },
+  "transcript": {
+    "title": "音声文字起こし",
+    "subtitle": "音声証拠 → 文字起こし → 主張 → 検証",
+    "listening": "STT 監視中",
+    "empty": "音声文字起こしはまだありません。",
+    "status": {
+      "done": "文字起こし済み",
+      "low_confidence": "低信頼度",
+      "failed": "文字起こし失敗",
+      "unavailable": "STT 未設定",
+      "none": "文字起こし中…"
+    },
+    "notApplied": "低信頼度 — 主張として採用せず",
+    "failedHint": "文字起こしに失敗、再試行できます",
+    "unavailableHint": "STT 未設定、キー設定後に再試行できます",
+    "retry": "文字起こしを再試行",
+    "retrying": "再試行中…",
+    "retryFailed": "再試行に失敗",
+    "provider": "プロバイダ",
+    "model": "モデル",
+    "language": "言語",
+    "sttConfidence": "STT 信頼度",
+    "verifyConfidence": "検証信頼度",
+    "claim": "システムが聞き取った主張(申告、判定ではない)",
+    "verdict": "クロス検証の判定(「検証済み」の唯一の出所)",
+    "noClaim": "主張は形成されず",
+    "noVerdict": "未検証",
+    "chain": {
+      "voice": "音声",
+      "claim": "主張",
+      "verdict": "判定"
+    },
+    "synthetic": "合成・デモ",
+    "syntheticNote": "サンプルデータ、実際のバックエンド文字起こしではありません"
   }
 }
