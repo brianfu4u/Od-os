@@ -302,5 +302,21 @@
     },
     "synthetic": "合成·演示",
     "syntheticNote": "示例数据,非真实后端转写"
+  },
+  "scan": {
+    "title": "扫码定位",
+    "locate": "扫码定位",
+    "close": "关闭",
+    "starting": "正在开启摄像头…",
+    "aim": "将二维码/条码对准取景框",
+    "unsupported": "此浏览器不支持摄像头扫码（如 iOS Safari），请用下方手动输入",
+    "denied": "摄像头权限被拒绝，请在浏览器设置里允许，或用下方手动输入",
+    "error": "无法开启摄像头，请重试或手动输入",
+    "retry": "重试",
+    "manualPlaceholder": "手动输入对象编码或 ID",
+    "manualSubmit": "确定",
+    "manualHint": "不便扫码时，可手动输入房间/设备编码或对象 ID",
+    "located": "已定位",
+    "notFound": "未找到该编码对应的对象（可能不属于本诊所）"
   }
 }

@@ -311,5 +311,21 @@
     },
     "synthetic": "Synthetic · demo",
     "syntheticNote": "Sample data, not a real backend transcript"
+  },
+  "scan": {
+    "title": "Scan to locate",
+    "locate": "Scan to locate",
+    "close": "Close",
+    "starting": "Starting camera…",
+    "aim": "Aim the QR / barcode at the frame",
+    "unsupported": "This browser can't scan with the camera (e.g. iOS Safari) — use manual input below",
+    "denied": "Camera permission denied — allow it in your browser, or use manual input below",
+    "error": "Couldn't start the camera — retry or use manual input",
+    "retry": "Retry",
+    "manualPlaceholder": "Enter an object code or ID",
+    "manualSubmit": "OK",
+    "manualHint": "If scanning isn't handy, type the room/asset code or object ID",
+    "located": "Located",
+    "notFound": "No object found for that code (it may belong to another clinic)"
   }
 }
