@@ -8,6 +8,7 @@ import { hhmm, pct } from '../../lib/format';
 import { DEV_TENANTS, IS_STAGING } from '../../lib/config';
 import { LocaleSwitcher } from '../LocaleSwitcher';
 import { safeStorage } from '../../lib/safe-storage';
+import { CameraScanner } from './CameraScanner';
 import {
   clearStaffToken,
   fetchMe,
@@ -63,8 +64,10 @@ const BTN_PRIMARY =
  * Staff terminal — mobile-first, usable on a phone browser (incl. WeChat's built-in browser). T1:
  * it authenticates via a real session (dev: staff dev-login; staging: password-gated staff
  * staging-login) so /reports + /uploads work on staging (NODE_ENV=production) instead of 401ing on
- * the dev X-Tenant-Id shim. Supports clock in/out and real rear-camera capture. The report AUTHOR is
- * the session's staff (the server ignores any client-supplied handle in prod).
+ * the dev X-Tenant-Id shim. Supports clock in/out and real rear-camera capture. T2 adds real
+ * camera QR/barcode scan-to-locate: scan a code → resolve it (tenant-scoped, RLS) → set the subject
+ * so a report/evidence attaches to the right object. The report AUTHOR is the session's staff (the
+ * server ignores any client-supplied handle in prod).
  */
 export function StaffConsole() {
   const t = useTranslations();
@@ -133,6 +136,8 @@ export function StaffConsole() {
   const [linkUpload, setLinkUpload] = useState(true);
   const [clock, setClock] = useState<ClockState>(null);
   const [fileName, setFileName] = useState<string>('');
+  const [showScanner, setShowScanner] = useState(false);
+  const [scanBusy, setScanBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const pushLog = useCallback((ok: boolean, msg: string) => {
@@ -156,6 +161,39 @@ export function StaffConsole() {
   }, [api, loadObjects]);
 
   const subject = objects.find((o) => o.id === subjectId);
+
+  // T2 · resolve a scanned code to an object in THIS tenant and make it the subject. The backend
+  // does the RLS-scoped resolution (a code from another tenant resolves to nothing).
+  const onScan = useCallback(
+    async (code: string): Promise<void> => {
+      setShowScanner(false);
+      if (!api) return;
+      setScanBusy(true);
+      try {
+        const { resolved } = await api.resolveScan(code);
+        if (resolved) {
+          const row: ObjRow = {
+            id: resolved.objectId,
+            type: resolved.type,
+            properties: { label: resolved.label },
+            verifiedState: resolved.verifiedState,
+            confidence: resolved.confidence,
+          };
+          setObjects((prev) => (prev.some((o) => o.id === row.id) ? prev : [row, ...prev]));
+          setSubjectId(resolved.objectId);
+          setScanSubject(true);
+          pushLog(true, `${t('scan.located')}: ${resolved.type} · ${resolved.label}`);
+        } else {
+          pushLog(false, `${t('scan.notFound')} (${code.slice(0, 24)})`);
+        }
+      } catch (e) {
+        pushLog(false, `${t('scan.title')}: ${e instanceof Error ? e.message : String(e)}`);
+      } finally {
+        setScanBusy(false);
+      }
+    },
+    [api, pushLog, t],
+  );
 
   async function clockPunch(type: 'clock_in' | 'clock_out'): Promise<void> {
     if (!api) return;
@@ -362,7 +400,15 @@ export function StaffConsole() {
             ))}
           </select>
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" onClick={() => void forceVerify()} disabled={busy || !subject} className="min-h-11 flex-1 rounded-xl bg-sky-500 px-3 py-2 text-sm font-medium text-white active:bg-sky-600 disabled:opacity-50">
+            <button
+              type="button"
+              onClick={() => setShowScanner((s) => !s)}
+              disabled={busy || scanBusy}
+              className="min-h-11 flex-1 rounded-xl border border-sky-500/50 bg-sky-500/10 px-3 py-2 text-sm font-medium text-sky-200 active:bg-sky-500/20 disabled:opacity-50"
+            >
+              📷 {t('scan.locate')}
+            </button>
+            <button type="button" onClick={() => void forceVerify()} disabled={busy || !subject} className="min-h-11 rounded-xl bg-sky-500 px-3 py-2 text-sm font-medium text-white active:bg-sky-600 disabled:opacity-50">
               {t('console.reverify')}
             </button>
             <button type="button" onClick={() => void loadObjects()} disabled={busy} className="min-h-11 rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-300 active:bg-slate-800 disabled:opacity-50">
@@ -372,6 +418,11 @@ export function StaffConsole() {
               {t('console.sweep')}
             </button>
           </div>
+          {showScanner ? (
+            <div className="mt-3">
+              <CameraScanner onResult={(c) => void onScan(c)} onClose={() => setShowScanner(false)} />
+            </div>
+          ) : null}
         </section>
 
         {/* report */}

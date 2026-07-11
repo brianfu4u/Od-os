@@ -15,6 +15,7 @@ import type {
   RecommendationRecord,
   RecommendationStatus,
   OperatingTempo,
+  ScanResolveResult,
   StaffReportInput,
   StaffReportResult,
   UploadResult,
@@ -126,6 +127,16 @@ export function makeApi(auth?: string | ApiAuth) {
     async objects(type?: string, signal?: AbortSignal): Promise<OntologyObject[]> {
       const q = type ? `?type=${encodeURIComponent(type)}` : '';
       return json(await fetch(`${API_BASE}/objects${q}`, { headers: authHeaders(), signal }));
+    },
+
+    /**
+     * T2 · resolve a scanned QR/barcode payload to one object in this tenant (read-only, RLS-scoped).
+     * Returns { resolved: null } when nothing matches (including a code that belongs to another tenant).
+     */
+    async resolveScan(code: string, signal?: AbortSignal): Promise<{ resolved: ScanResolveResult | null }> {
+      return json(
+        await fetch(`${API_BASE}/objects/resolve?code=${encodeURIComponent(code)}`, { headers: authHeaders(), signal }),
+      );
     },
 
     /** P3 drill-down: an object's full story (object + events + verification ledger). */
