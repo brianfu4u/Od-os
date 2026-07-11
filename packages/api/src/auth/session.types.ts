@@ -34,4 +34,6 @@ export interface ManagerIdentityRow {
   tenant_id: string;
   manager_id: string;
   role: string;
+  /** scrypt-encoded credential (0012). NULL ⇒ this manager has no password login yet. */
+  password_hash: string | null;
 }

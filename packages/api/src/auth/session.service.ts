@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { withTenant } from '../database/tenant-context';
 import { SessionStore } from './session.store';
+import { DUMMY_PASSWORD_HASH, hashPassword, verifyPassword } from './password';
 import type { SessionIdentity } from './session.types';
 
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h
@@ -45,6 +46,26 @@ export class SessionService {
   }
 
   /**
+   * PROD manager path: authenticate a manager by login + password against the stored scrypt hash.
+   * Works in EVERY environment (including production) — this is the real credential login, NOT the
+   * dev/staging shim. The tenant + role come from the server-side manager_identities row; the client
+   * NEVER supplies a tenant. On any failure it throws a GENERIC 401 (no user-enumeration): an unknown
+   * login (or one with no credential yet) still runs a constant-time dummy verify so the timing does
+   * not reveal whether the login exists.
+   */
+  async loginManager(input: { login: string; password: string }): Promise<{ token: string; identity: SessionIdentity }> {
+    const idn = await this.store.findManagerIdentity(input.login);
+    if (!idn || !idn.password_hash) {
+      verifyPassword(input.password, DUMMY_PASSWORD_HASH); // burn ~equal time, then deny
+      throw new UnauthorizedException('invalid credentials');
+    }
+    if (!verifyPassword(input.password, idn.password_hash)) {
+      throw new UnauthorizedException('invalid credentials');
+    }
+    return this.issue('manager', { tenantId: idn.tenant_id, managerId: idn.manager_id, role: idn.role });
+  }
+
+  /**
    * DEV-ONLY mock of the wx.login → session flow: provisions (idempotently) the Staff object +
    * the openid→staff identity mapping, then issues a session. Caller (controller) must gate this
    * to non-production. Uses withTenant() to create the tenant-scoped Staff object under RLS.
@@ -69,8 +90,8 @@ export class SessionService {
 
   /**
    * DEV-ONLY mock manager login: provisions a manager (Staff object, role=manager) + the
-   * login→manager identity mapping, then issues a session. Prod manager login (email magic
-   * link / SSO) is a founder-dependency TODO.
+   * login→manager identity mapping, then issues a session. Prod manager login is the real
+   * credential path (loginManager); this mock stays NODE_ENV-gated (404 in production).
    */
   async devLoginManager(input: {
     tenantId: string;
@@ -88,6 +109,37 @@ export class SessionService {
       await this.store.upsertManagerIdentity({ login: input.login, tenantId: input.tenantId, managerId, role });
     }
     return this.issue('manager', { tenantId: input.tenantId, managerId, role });
+  }
+
+  /**
+   * Idempotent manager seed (synthetic bootstrap). Provisions the manager identity if missing and
+   * sets the credential hash. Called from ManagerSeedService when MANAGER_SEED_* env is present.
+   *  - New manager → provision Staff(role) + identity mapping + set password ⇒ 'created'.
+   *  - Existing WITHOUT a credential → set password ⇒ 'updated'.
+   *  - Existing WITH a credential → left untouched (⇒ 'skipped') unless force=true (rotation).
+   * Stores ONLY the scrypt hash — never the plaintext.
+   */
+  async seedManager(input: {
+    tenantId: string;
+    login: string;
+    password: string;
+    displayName?: string;
+    role?: string;
+    force?: boolean;
+  }): Promise<{ action: 'created' | 'updated' | 'skipped'; managerId: string }> {
+    const role = input.role ?? 'manager';
+    const existing = await this.store.findManagerIdentity(input.login);
+    let managerId: string;
+    if (existing && existing.tenant_id === input.tenantId) {
+      managerId = existing.manager_id;
+    } else {
+      managerId = await this.provisionStaff(input.tenantId, input.login, input.displayName, role);
+      await this.store.upsertManagerIdentity({ login: input.login, tenantId: input.tenantId, managerId, role });
+    }
+    const hasCredential = Boolean(existing?.password_hash);
+    if (hasCredential && !input.force) return { action: 'skipped', managerId };
+    await this.store.setManagerPassword(input.login, hashPassword(input.password));
+    return { action: existing ? 'updated' : 'created', managerId };
   }
 
   /** Find-or-create a Staff object in the tenant (RLS-scoped via withTenant). */
