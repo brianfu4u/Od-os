@@ -1,9 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { buildTranscriptFeed, transcriptView, type ObjectRow, type TranscriptFeedItem } from './transcript-model';
+import type { VoiceFeedRecord } from '@clearview/shared';
+import { buildFeed, transcriptView, type TranscriptFeedItem } from './transcript-model';
 import { syntheticFeedItems } from './synthetic-transcripts';
 
-function voiceDoc(id: string, transcript: unknown, extra: Record<string, unknown> = {}): ObjectRow {
-  return { id, type: 'Document', properties: { kind: 'voice', mime: 'audio/m4a', transcript, ...extra }, updatedAt: '2026-07-11T00:00:00.000Z' };
+function rec(
+  objectId: string,
+  transcript: unknown,
+  opts: { llm?: Record<string, unknown>; verdict?: VoiceFeedRecord['verdict']; at?: string } = {},
+): VoiceFeedRecord {
+  const t = transcript as { at?: string } | null | undefined;
+  return {
+    objectId,
+    at: opts.at ?? t?.at ?? '2026-07-11T00:00:00.000Z',
+    properties: { kind: 'voice', mime: 'audio/m4a', transcript, ...(opts.llm ? { llm: opts.llm } : {}) },
+    verdict: opts.verdict ?? null,
+  };
 }
 
 describe('transcriptView — four states + graceful degrade', () => {
@@ -56,60 +67,57 @@ describe('transcriptView — four states + graceful degrade', () => {
 
   it('renders transcript text as PLAIN TEXT — HTML is returned verbatim (React escapes on render)', () => {
     const v = transcriptView({ text: '<b>x</b><script>alert(1)</script>', status: 'done' });
-    expect(v.text).toBe('<b>x</b><script>alert(1)</script>'); // never parsed/stripped → escaped by React {text}
+    expect(v.text).toBe('<b>x</b><script>alert(1)</script>');
   });
 });
 
-describe('buildTranscriptFeed — provenance & the moat', () => {
-  it('links a transcript to its claim (LLM1) and to its verdict (Task, the only verified source)', () => {
-    const doc = voiceDoc('doc-1', { text: '3号房已备好', status: 'done', at: '2026-07-11T01:00:00.000Z' }, {
-      llm: { claim: { taskType: 'room_turnover', claimedState: 'ready' } },
+describe('buildFeed — scoped records → provenance & the moat', () => {
+  it('derives the claim, preferring classification.taskType as a fallback (improvement 2)', () => {
+    // claim carries only claimedState; taskType lives on classification → must still show.
+    const r = rec('doc-1', { text: '3号房已备好', status: 'done', at: '2026-07-11T01:00:00.000Z' }, {
+      llm: { claim: { claimedState: 'ready' }, classification: { taskType: 'room_turnover' } },
+      verdict: { verifiedState: 'verified', confidence: 0.855 },
     });
-    const task: ObjectRow = { id: 'task-1', type: 'Task', properties: { claimedBy: 'doc-1' }, verifiedState: 'verified', confidence: 0.855 };
-
-    const [item] = buildTranscriptFeed([doc], [task]);
+    const [item] = buildFeed([r]);
     expect(item!.transcript.status).toBe('done');
     expect(item!.claim).toEqual({ taskType: 'room_turnover', claimedState: 'ready' });
     expect(item!.verdict).toEqual({ verifiedState: 'verified', confidence: 0.855 });
   });
 
-  it('a transcript alone yields NO verdict — the verdict comes only from a Task', () => {
-    const doc = voiceDoc('doc-2', { text: '3号房已备好', status: 'done' }, { llm: { claim: { taskType: 'room_turnover', claimedState: 'ready' } } });
-    const [item] = buildTranscriptFeed([doc], []); // no tasks → no verdict
+  it('prefers claim.taskType when present', () => {
+    const r = rec('doc-x', { text: 'done', status: 'done' }, { llm: { claim: { taskType: 'pretest_done', claimedState: 'done' }, classification: { taskType: 'room_turnover' } } });
+    expect(buildFeed([r])[0]!.claim).toEqual({ taskType: 'pretest_done', claimedState: 'done' });
+  });
+
+  it('a transcript alone yields NO verdict — the verdict comes only from the record (Task)', () => {
+    const r = rec('doc-2', { text: '3号房已备好', status: 'done' }, { llm: { claim: { claimedState: 'ready' }, classification: { taskType: 'room_turnover' } } });
+    const [item] = buildFeed([r]); // no verdict on the record
     expect(item!.claim).not.toBeNull();
     expect(item!.verdict).toBeNull();
-    // The transcript view itself never carries a "verified" flag — only status + STT confidence.
     expect(Object.values(item!.transcript)).not.toContain('verified');
   });
 
-  it('excludes non-voice documents', () => {
-    const photo: ObjectRow = { id: 'p', type: 'Document', properties: { kind: 'photo', mime: 'image/jpeg' } };
-    expect(buildTranscriptFeed([photo], [])).toHaveLength(0);
-  });
-
-  it('failed/low-confidence transcripts carry no claim', () => {
-    const failed = voiceDoc('doc-f', { status: 'failed', error: 'HTTP 500' });
-    const [item] = buildTranscriptFeed([failed], []);
+  it('omits the claim gracefully when no claimedState (failed/low-confidence)', () => {
+    const failed = rec('doc-f', { status: 'failed', error: 'HTTP 500' });
+    const [item] = buildFeed([failed]);
     expect(item!.transcript.retryable).toBe(true);
     expect(item!.claim).toBeNull();
   });
 
   it('sorts newest first', () => {
-    const a = voiceDoc('a', { status: 'done', text: 'a', at: '2026-07-11T01:00:00.000Z' });
-    const b = voiceDoc('b', { status: 'done', text: 'b', at: '2026-07-11T03:00:00.000Z' });
-    const ids = buildTranscriptFeed([a, b], []).map((i) => i.id);
-    expect(ids).toEqual(['b', 'a']);
+    const a = rec('a', { status: 'done', text: 'a', at: '2026-07-11T01:00:00.000Z' });
+    const b = rec('b', { status: 'done', text: 'b', at: '2026-07-11T03:00:00.000Z' });
+    expect(buildFeed([a, b]).map((i) => i.id)).toEqual(['b', 'a']);
   });
 });
 
 describe('synthetic shim gate', () => {
   it('adds nothing when the gate is off (no synthetic/placeholder leaks)', () => {
-    const items = buildTranscriptFeed([], [], { synthetic: false, syntheticItems: syntheticFeedItems() });
-    expect(items).toHaveLength(0);
+    expect(buildFeed([], { synthetic: false, syntheticItems: syntheticFeedItems() })).toHaveLength(0);
   });
 
   it('appends flagged demo items only when the gate is on', () => {
-    const items: TranscriptFeedItem[] = buildTranscriptFeed([], [], { synthetic: true, syntheticItems: syntheticFeedItems() });
+    const items: TranscriptFeedItem[] = buildFeed([], { synthetic: true, syntheticItems: syntheticFeedItems() });
     expect(items.length).toBeGreaterThan(0);
     expect(items.every((i) => i.synthetic === true)).toBe(true);
   });

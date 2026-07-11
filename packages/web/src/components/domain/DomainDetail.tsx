@@ -66,10 +66,10 @@ export function DomainDetail({ domain }: { domain: DomainKey }) {
           api.objects('Alert', ctrl.signal),
           api.recommendations('open', ctrl.signal),
         ]);
-        const objs = objLists.flat() as unknown as ObjRow[];
+        const objs: ObjRow[] = objLists.flat();
         setObjects(objs);
         const ids = new Set(objs.map((o) => o.id));
-        setAlerts((alertList as unknown as ObjRow[]).filter((a) => ids.has(String(a.properties?.objectId ?? ''))));
+        setAlerts(alertList.filter((a) => ids.has(String(a.properties?.objectId ?? ''))));
         setCues(recs.filter((r) => r.domain === TILE_TO_RECDOMAIN[domain]));
         setError(null);
       } catch (e) {

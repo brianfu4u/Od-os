@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { OverviewResult, RecommendationRecord } from '@clearview/shared';
 import { makeApi } from '../lib/api';
 import { STT_SYNTHETIC } from '../lib/config';
-import { buildTranscriptFeed, type ObjectRow, type TranscriptFeedItem } from '../lib/transcript-model';
+import { buildFeed, type TranscriptFeedItem } from '../lib/transcript-model';
 import { syntheticFeedItems } from '../lib/synthetic-transcripts';
 
 export type FeedStatus = 'connecting' | 'live' | 'offline';
@@ -30,11 +30,13 @@ export interface LiveData {
 
 /**
  * Wires the command center to the LIVE API using the manager SESSION token: initial load of the
- * overview aggregate + open recommendations + voice transcripts, an EventSource on /objects/stream
- * (?session=) that debounces a refetch on every change and AUTO-RECONNECTS with capped backoff, and
- * approve/undo/dismiss/snooze + transcription retry. Because the SSE refetch reloads the transcript
- * feed too, a transcript.completed/failed write (which changes the voice Document) flows into the UI
- * live. All fetches run only in the browser, so the static prerender stays data-free.
+ * overview aggregate + open recommendations + the scoped voice-transcript feed, an EventSource on
+ * /objects/stream (?session=) that debounces a refetch on every change and AUTO-RECONNECTS with
+ * capped backoff, and approve/undo/dismiss/snooze + transcription retry. Because the SSE refetch
+ * reloads the transcript feed too, a transcript.completed/failed write (which changes the voice
+ * Document) flows into the UI live. The voice feed uses the scoped /transcription/feed endpoint, so
+ * the command center never pulls every Document + Task. All fetches run only in the browser, so the
+ * static prerender stays data-free.
  */
 export function useLiveData(token: string): LiveData {
   const api = useMemo(() => makeApi({ token }), [token]);
@@ -50,16 +52,15 @@ export function useLiveData(token: string): LiveData {
   const load = useCallback(
     async (signal?: AbortSignal) => {
       try {
-        const [ov, recs, docs, tasks] = await Promise.all([
+        const [ov, recs, feed] = await Promise.all([
           api.overview(signal),
           api.recommendations('open', signal),
-          api.objects('Document', signal),
-          api.objects('Task', signal),
+          api.transcripts(undefined, signal),
         ]);
         setOverview(ov);
         setRecommendations(recs);
         setTranscripts(
-          buildTranscriptFeed(docs as unknown as ObjectRow[], tasks as unknown as ObjectRow[], {
+          buildFeed(feed, {
             synthetic: STT_SYNTHETIC,
             syntheticItems: STT_SYNTHETIC ? syntheticFeedItems() : undefined,
           }),
