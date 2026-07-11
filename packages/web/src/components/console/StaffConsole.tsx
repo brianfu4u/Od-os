@@ -9,6 +9,7 @@ import { DEV_TENANTS, IS_STAGING } from '../../lib/config';
 import { LocaleSwitcher } from '../LocaleSwitcher';
 import { safeStorage } from '../../lib/safe-storage';
 import { CameraScanner } from './CameraScanner';
+import { AudioRecorder } from './AudioRecorder';
 import {
   clearStaffToken,
   fetchMe,
@@ -261,6 +262,22 @@ export function StaffConsole() {
     }
   }
 
+  // T3 · upload a recorded audio blob as voice evidence — reuses the T4 pipeline (STT → claim →
+  // LLM1). Linked to the current subject when set, so it also attaches as evidence to that object.
+  async function submitRecording(file: File): Promise<void> {
+    if (!api) return;
+    setBusy(true);
+    try {
+      const res = await api.upload(file, { kind: 'voice', linkTo: subject ? subject.id : undefined });
+      pushLog(true, `${t('rec.title')} → ${res.deduped ? t('console.deduped') : t('console.created')} ${res.objectId.slice(0, 8)} · ${t('rec.transcribing')}`);
+      await loadObjects();
+    } catch (e) {
+      pushLog(false, `${t('rec.title')}: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function forceVerify(): Promise<void> {
     if (!api || !subject) return;
     setBusy(true);
@@ -483,6 +500,15 @@ export function StaffConsole() {
             </button>
           </div>
         </form>
+
+        {/* live audio recording — real mic; transcribes via the existing STT pipeline (T4) */}
+        <section className={CARD}>
+          <h2 className="text-sm font-semibold">{t('rec.card')}</h2>
+          <p className="mt-1 text-xs text-slate-500">{t('rec.cardHint')}</p>
+          <div className="mt-3">
+            <AudioRecorder onComplete={(f) => void submitRecording(f)} disabled={busy} />
+          </div>
+        </section>
 
         {/* activity */}
         <section className={CARD}>
