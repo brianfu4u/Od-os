@@ -72,8 +72,8 @@ describe('assertProductionSecurity — fail-closed boot guard', () => {
     expect(() => assertProductionSecurity(OK)).not.toThrow();
   });
 
-  it('throws when the DB CA is missing', () => {
-    expect(() => assertProductionSecurity(prod({ CORS_ORIGIN: 'https://app.example.com' }))).toThrow(/DATABASE_CA_CERT/);
+  it('PASSES in production without a CA — TLS still verifies against public CAs (CA is an optional override)', () => {
+    expect(() => assertProductionSecurity(prod({ CORS_ORIGIN: 'https://app.example.com' }))).not.toThrow();
   });
 
   it('throws when TLS is explicitly disabled in production', () => {

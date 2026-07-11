@@ -5,9 +5,11 @@ import { assertRuntimeRoleSafe } from './database/pool';
 import { assertProductionSecurity, resolveCorsOptions } from './config/security';
 
 async function bootstrap(): Promise<void> {
-  // P5.1 fail-closed gate: in production, refuse to start unless DB TLS is fully verified
-  // (rejectUnauthorized=true + DATABASE_CA_CERT) and CORS has an explicit, wildcard-free allow-list.
-  // A misconfig is a hard boot failure here, never a silent downgrade. No-op outside production.
+  // P5.1 fail-closed gate: in production, refuse to start when TLS is explicitly disabled
+  // (DATABASE_SSL=false) or CORS lacks an explicit, wildcard-free allow-list. DB TLS always verifies
+  // (rejectUnauthorized=true; DATABASE_CA_CERT is an optional override to pin a private CA — public
+  // CAs verify by default). A misconfig is a hard boot failure here, never a silent downgrade. No-op
+  // outside production.
   assertProductionSecurity();
 
   const app = await NestFactory.create(AppModule);

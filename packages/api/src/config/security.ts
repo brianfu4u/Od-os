@@ -3,12 +3,16 @@
  *
  * Two gates that MUST close before any real (PHI) data is connected, enforced STRUCTURALLY
  * ("fail-closed"), not by "remembering to set an env var":
- *   1. DB TLS: production connects to Postgres with FULL verification (rejectUnauthorized=true + a
- *      CA from the environment ⇒ verify-full). Production NEVER falls back to rejectUnauthorized=false.
+ *   1. DB TLS: production connects to Postgres with verification (rejectUnauthorized=true ⇒ chain +
+ *      hostname checked). DATABASE_CA_CERT is an OPTIONAL override — when absent, the connection
+ *      verifies against the system/public CA store (Render/Neon/Supabase work out of the box); set
+ *      it only for a self-hosted/private CA to pin the trust chain. Production NEVER falls back to
+ *      rejectUnauthorized=false.
  *   2. CORS: production uses an explicit allow-list from the environment. No "*" wildcard, no
  *      reflecting arbitrary Origins.
- * `assertProductionSecurity()` refuses to boot when production is misconfigured (missing CA, TLS
- * disabled, empty/invalid CORS allow-list) so a misconfig is a hard failure, not a silent downgrade.
+ * `assertProductionSecurity()` refuses to boot when production is misconfigured (TLS explicitly
+ * disabled, or an empty/invalid CORS allow-list) so a misconfig is a hard failure, not a silent
+ * downgrade. A missing CA is NOT a misconfig — public-CA verification is the safe default.
  *
  * These functions take `env` explicitly (default `process.env`) so they are deterministically
  * unit-testable in node without mutating global state — and they touch ONLY the DB connection layer
@@ -67,9 +71,9 @@ export function isValidOrigin(o: string): boolean {
 
 /**
  * Resolve the pg `ssl` config for a connection.
- *  - Production: ALWAYS full verification — `{ rejectUnauthorized: true, ca? }`. The CA (PEM) comes
- *    from `DATABASE_CA_CERT`; its presence is enforced by assertProductionSecurity() at boot. There
- *    is deliberately no production code path that yields `rejectUnauthorized: false`.
+ *  - Production: ALWAYS verifies — `{ rejectUnauthorized: true, ca? }`. With no CA it verifies against
+ *    the system/public CA store; a provided `DATABASE_CA_CERT` (PEM) pins a specific CA (self-hosted/
+ *    private). There is deliberately no production code path that yields `rejectUnauthorized: false`.
  *  - Dev/test: honor a provided CA (verify), else keep the convenient behavior — off for localhost,
  *    and accept managed-provider certs (`rejectUnauthorized: false`) for a hosted synthetic DB.
  *    `DATABASE_SSL=false` forces off (local only).
@@ -79,7 +83,7 @@ export function resolveDbSsl(connectionString: string, env: Env = process.env): 
 
   if (isProd(env)) {
     // verify-full: rejectUnauthorized=true makes tls.connect check the chain; pg sets servername
-    // from the host, so the hostname is verified too. CA is required (guarded at boot).
+    // from the host, so the hostname is verified too. CA is optional (public-CA store by default).
     return ca ? { rejectUnauthorized: true, ca } : { rejectUnauthorized: true };
   }
 
@@ -109,21 +113,18 @@ export function resolveCorsOptions(env: Env = process.env): CorsResolved {
 /**
  * Fail-closed boot guard. In production, throws (aborting startup) when either gate is misconfigured.
  * A no-op outside production so dev/CI are unaffected. Call once at bootstrap before listening.
+ *
+ * Note: a missing DATABASE_CA_CERT is intentionally NOT a failure — production still verifies TLS
+ * against the system/public CA store. The CA is only an optional override to pin a private CA.
  */
 export function assertProductionSecurity(env: Env = process.env): void {
   if (!isProd(env)) return;
 
   const problems: string[] = [];
 
-  // ── Gate 1: DB TLS full verification ──
+  // ── Gate 1: DB TLS is verified (never disabled in production) ──
   if (env.DATABASE_SSL === 'false') {
-    problems.push('DATABASE_SSL=false disables TLS — not allowed in production (verify-full TLS is required).');
-  }
-  if (!(env.DATABASE_CA_CERT?.trim())) {
-    problems.push(
-      'DATABASE_CA_CERT (PEM of the database server CA) is required in production for full TLS verification. ' +
-        'Inject it via the environment (never commit it).',
-    );
+    problems.push('DATABASE_SSL=false disables TLS — not allowed in production (TLS verification is required).');
   }
 
   // ── Gate 2: CORS explicit allow-list ──
