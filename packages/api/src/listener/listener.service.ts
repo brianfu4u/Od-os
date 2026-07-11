@@ -11,13 +11,17 @@
  *
  * Non-blocking: the event handler schedules processing and returns immediately so report ingestion
  * is never slowed by an LLM call. `idle()` lets tests await in-flight work deterministically.
+ *
+ * Sources: a report arrives as a Communication (via `report.received` → `process`). P7/T4 also feeds
+ * a voice TRANSCRIPT through the SAME path via `analyzeText` — reusing analyze/classify/claim rather
+ * than re-implementing extraction — so a spoken report drives the pipeline exactly like a typed one.
  */
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { RecommendationCandidate, Severity } from '@clearview/shared';
 import { DomainEventBus } from '../events/domain-event-bus';
 import { ObjectsService } from '../objects/objects.service';
 import { RecommendationService } from '../recommendations/recommendation.service';
-import { LlmListenerRepository } from './listener.repository';
+import { LlmListenerRepository, type LoadedComm } from './listener.repository';
 import { toDomainName } from './listen-lex';
 import { PROMPT_VERSIONS } from './prompts';
 import {
@@ -29,6 +33,18 @@ import {
 } from './listener.types';
 
 const CLAIM_MIN_CONFIDENCE = 0.6;
+
+/** A non-report text source to analyze through the same path (e.g. a voice transcript). */
+export interface AnalyzeTextInput {
+  /** The already-persisted object to annotate + attribute the audit to (e.g. the voice Document). */
+  objectId: string;
+  text: string;
+  reportType?: string | null;
+  fields?: Record<string, unknown>;
+  hasAttachments?: boolean;
+  hasScans?: boolean;
+  locale?: ListenLocale | string | null;
+}
 
 @Injectable()
 export class LlmListenerService {
@@ -71,7 +87,33 @@ export class LlmListenerService {
   async process(tenantId: string, communicationId: string): Promise<ListenAnalysis | null> {
     const comm = await this.repo.loadCommunication(tenantId, communicationId);
     if (!comm) return null;
+    return this.analyze(tenantId, comm);
+  }
 
+  /**
+   * P7/T4: analyze an already-persisted text source (e.g. a voice transcript) through the SAME
+   * moat-guarded path as a report. `objectId` is the source object annotated + attributed in the
+   * audit (the voice Document). No new claim-extraction — reuses analyze/classify/apply.
+   */
+  async analyzeText(tenantId: string, input: AnalyzeTextInput): Promise<ListenAnalysis | null> {
+    const comm: LoadedComm = {
+      id: input.objectId,
+      text: input.text,
+      reportType: input.reportType ?? 'voice',
+      fields: input.fields ?? {},
+      hasAttachments: input.hasAttachments ?? false,
+      hasScans: input.hasScans ?? false,
+      locale: typeof input.locale === 'string' ? input.locale : null,
+    };
+    return this.analyze(tenantId, comm);
+  }
+
+  /**
+   * The shared analyze → annotate → apply-claim → suggest → audit core. Used by both `process`
+   * (Communication reports) and `analyzeText` (voice transcripts), so the moat is enforced in ONE
+   * place: the only state write is `applyClaim` (claimed_state only).
+   */
+  private async analyze(tenantId: string, comm: LoadedComm): Promise<ListenAnalysis | null> {
     const locale = (comm.locale as ListenLocale) || undefined;
     let analysis: ListenAnalysis | null = null;
     let appliedObjectId: string | null = null;
@@ -87,8 +129,8 @@ export class LlmListenerService {
         locale,
       });
 
-      // 1) Annotate the Communication with the classification (safe: no state fields touched).
-      await this.objects.update(tenantId, communicationId, {
+      // 1) Annotate the source object with the classification (safe: no state fields touched).
+      await this.objects.update(tenantId, comm.id, {
         properties: {
           llm: {
             adapter: this.listener.name,
@@ -110,7 +152,7 @@ export class LlmListenerService {
         } else {
           const resolved = await this.repo.resolveTaskForClaim(tenantId, analysis.claim, { create: true });
           if (resolved) {
-            await this.applyClaim(tenantId, resolved.objectId, analysis.claim.claimedState, communicationId);
+            await this.applyClaim(tenantId, resolved.objectId, analysis.claim.claimedState, comm.id);
             appliedObjectId = resolved.objectId;
             appliedAction = 'claim_applied';
           } else {
@@ -123,13 +165,13 @@ export class LlmListenerService {
 
       // 3) Candidate cues → the EXISTING S3 orchestrator (dedup / rank / human-in-the-loop).
       if (analysis.candidateCues.length > 0 && this.recommendations) {
-        const subject = appliedObjectId ?? communicationId;
+        const subject = appliedObjectId ?? comm.id;
         const candidates = analysis.candidateCues.map((cue): RecommendationCandidate => ({
           domain: toDomainName(cue.domain),
           sourceAgent: toDomainName(cue.domain),
           title: cue.title,
           why: cue.detail ?? analysis!.summary,
-          evidence: [{ kind: 'llm1_listen', ref: communicationId, note: 'proposed by LLM1 listen layer' }],
+          evidence: [{ kind: 'llm1_listen', ref: comm.id, note: 'proposed by LLM1 listen layer' }],
           confidence: analysis!.confidence,
           proposedActions: [],
           objectId: subject,
@@ -146,7 +188,7 @@ export class LlmListenerService {
       await this.audit(tenantId, comm, analysis, appliedObjectId, appliedAction);
       return analysis;
     } catch (err) {
-      this.logger.error(`process failed for communication ${communicationId}: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.error(`analyze failed for source ${comm.id}: ${err instanceof Error ? err.message : String(err)}`);
       await this.audit(tenantId, comm, analysis, appliedObjectId, 'error').catch(() => undefined);
       return analysis;
     }
@@ -157,10 +199,10 @@ export class LlmListenerService {
    * + properties — there is deliberately no way to pass verifiedState from here. Setting the claim
    * emits object.state.claimed → deterministic verification runs and owns the verdict.
    */
-  private async applyClaim(tenantId: string, objectId: string, claimedState: string, communicationId: string): Promise<void> {
+  private async applyClaim(tenantId: string, objectId: string, claimedState: string, sourceId: string): Promise<void> {
     await this.objects.update(tenantId, objectId, {
       claimedState,
-      properties: { claimedAt: new Date().toISOString(), claimedBy: communicationId },
+      properties: { claimedAt: new Date().toISOString(), claimedBy: sourceId },
     });
   }
 

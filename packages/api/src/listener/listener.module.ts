@@ -26,5 +26,7 @@ export function makeListener(): LlmListenerPort {
   imports: [ObjectsModule, RecommendationModule],
   controllers: [ListenerController],
   providers: [LlmListenerService, LlmListenerRepository, { provide: LLM_LISTENER, useFactory: makeListener }],
+  // Exported so P7/T4 (TranscriptionModule) can feed voice transcripts through the same LLM1 path.
+  exports: [LlmListenerService],
 })
 export class ListenerModule {}

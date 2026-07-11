@@ -6,6 +6,7 @@ import { STORAGE_PORT, type StoragePort } from '../storage/storage.provider';
 import { UploadsRepository } from './uploads.repository';
 import { RealtimeService } from '../objects/realtime.service';
 import { VERIFICATION_HOOK, type VerificationHook } from '../verification/verification.hook';
+import { TRANSCRIPTION_HOOK, type TranscriptionHook } from '../transcription/transcription.hook';
 import { detectObjectType, detectSubKind, validateUpload } from './uploads.validation';
 import { stripImageMetadata } from './image-metadata';
 
@@ -24,6 +25,7 @@ export class UploadsService {
     private readonly repo: UploadsRepository,
     private readonly realtime: RealtimeService,
     @Optional() @Inject(VERIFICATION_HOOK) private readonly verification?: VerificationHook,
+    @Optional() @Inject(TRANSCRIPTION_HOOK) private readonly transcription?: TranscriptionHook,
   ) {}
 
   async upload(
@@ -73,6 +75,13 @@ export class UploadsService {
       } catch {
         /* re-verification is best-effort; never fail the upload */
       }
+    }
+
+    // P7 · T4: a voice clip → transcribe asynchronously (STT). Fire-and-forget so the upload
+    // response is NEVER blocked by the STT call; the transcript lands later as a derived field on
+    // this Document and is fed to LLM1. transcribeObject swallows its own errors.
+    if (kind === 'voice' && this.transcription) {
+      void this.transcription.transcribeObject(tenantId, id).catch(() => undefined);
     }
 
     return {
