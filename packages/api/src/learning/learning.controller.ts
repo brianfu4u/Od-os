@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { TenantGuard } from '../tenant/tenant.guard';
+import { RolesGuard } from '../tenant/roles.guard';
+import { Roles } from '../tenant/roles.decorator';
 import { TenantId } from '../tenant/tenant.decorator';
 import { LearningService } from './learning.service';
 
@@ -8,8 +10,12 @@ import { LearningService } from './learning.service';
  * (never silent model changes); `rollback` reverts the last run; the feedback/audit reads expose
  * the trail. The verdict-correction entry point lives on the verification controller
  * (POST /verifications/correct) since it also updates the object + ledger.
+ *
+ * Management-only: the entire learning surface is a command-center function, so it requires a
+ * manager session (server-side enforced by RolesGuard).
  */
-@UseGuards(TenantGuard)
+@UseGuards(TenantGuard, RolesGuard)
+@Roles('manager')
 @Controller('learning')
 export class LearningController {
   constructor(private readonly learning: LearningService) {}
