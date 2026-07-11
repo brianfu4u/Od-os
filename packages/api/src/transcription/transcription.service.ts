@@ -14,6 +14,7 @@
  * never touched. Everything runs inside withTenant() so tenant isolation holds.
  */
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import type { VoiceFeedRecord } from '@clearview/shared';
 import { STORAGE_PORT, type StoragePort } from '../storage/storage.provider';
 import { ObjectsService } from '../objects/objects.service';
 import { LlmListenerService } from '../listener/listener.service';
@@ -135,6 +136,15 @@ export class TranscriptionService implements TranscriptionHook {
       this.logger.warn(`transcription ${status} for ${objectId} via ${result.provider}${result.error ? `: ${result.error}` : ''}`);
     }
     return status;
+  }
+
+  /**
+   * Read-only, tenant-scoped voice-transcript feed for the command center (P7/T4-web follow-up):
+   * voice evidence + each transcript's driving verdict, joined server-side. Replaces the client
+   * pulling every Document + Task. Purely a read projection — no state writes, moat untouched.
+   */
+  feed(tenantId: string, limit?: number): Promise<VoiceFeedRecord[]> {
+    return this.repo.listVoiceFeed(tenantId, limit ?? 100);
   }
 }
 
