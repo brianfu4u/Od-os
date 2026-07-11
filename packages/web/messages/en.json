@@ -240,7 +240,11 @@
     "storageWarning": "Local storage is unavailable: your sign-in won't be remembered (the app still works).",
     "password": "Password",
     "stagingSubtitle": "Staging: enter the manager password to enter (synthetic data).",
-    "stagingNote": "Staging uses a single shared password (server env-gated; the open dev-login stays disabled in prod). Synthetic data only."
+    "stagingNote": "Staging uses a single shared password (server env-gated; the open dev-login stays disabled in prod). Synthetic data only.",
+    "credentialSubtitle": "Sign in to the command center with your manager account",
+    "loginId": "Login ID",
+    "loginIdPlaceholder": "e.g. dana@riverside",
+    "credentialNote": "Sessions expire after 12 hours; sign out anytime. Passwords are verified server-side against a hash, never stored or logged in plaintext."
   },
   "shell": {
     "tag": "Manager",
@@ -342,15 +346,5 @@
     "retry": "Retry",
     "transcribing": "transcribing",
     "hint": "Synthetic / demo audio only — never record real patient info. With no STT key the clip is still saved and the transcript is marked unavailable."
-  },
-  "mytasks": {
-    "title": "My tasks",
-    "subtitle": "Tasks assigned to me (verdict from cross-verification)",
-    "empty": "No tasks assigned to you",
-    "refresh": "Refresh",
-    "pick": "Use as subject & report",
-    "picked": "Picked as subject",
-    "loadFailed": "Failed to load my tasks",
-    "claimed": "claimed"
   }
 }
