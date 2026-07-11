@@ -143,13 +143,15 @@
       "task_update": "Task update",
       "event": "Event",
       "evidence": "Evidence",
-      "scan": "Scan"
+      "scan": "Scan",
+      "support_request": "Support"
     },
     "annScan": "Scan captured as first-class verification evidence",
     "annEvidence": "Attachment linked as evidence",
     "annTask": "Task state updated; re-verification triggered",
     "annClock": "Attendance recorded",
-    "annDefault": "Folded into cross-verification"
+    "annDefault": "Folded into cross-verification",
+    "annSupport": "Support request raised for a manager to handle"
   },
   "storage": {
     "label": "Local preference (localStorage fallback demo)",
@@ -328,19 +330,18 @@
     "located": "Located",
     "notFound": "No object found for that code (it may belong to another clinic)"
   },
-  "rec": {
-    "card": "Record & report",
-    "cardHint": "Record a short clip; it auto-transcribes and participates as a claim (visible in the command center).",
-    "title": "Recording",
-    "start": "Start recording",
-    "stop": "Stop",
-    "send": "Upload recording",
-    "again": "Re-record",
-    "unsupported": "This browser can't record audio — use another report method",
-    "denied": "Microphone permission denied — allow it in your browser and retry",
-    "error": "Couldn't record — retry",
-    "retry": "Retry",
-    "transcribing": "transcribing",
-    "hint": "Synthetic / demo audio only — never record real patient info. With no STT key the clip is still saved and the transcript is marked unavailable."
+  "support": {
+    "title": "Request support",
+    "hint": "Pick a type and describe it; optionally link the current object. It appears in the command center for a manager to handle.",
+    "notePlaceholder": "Describe what support you need…",
+    "needNote": "Please describe the support needed",
+    "link": "Link the selected object",
+    "submit": "Send support request",
+    "types": {
+      "supervisor": "Supervisor",
+      "staff": "Extra hands",
+      "equipment": "Equipment",
+      "other": "Other"
+    }
   }
 }
