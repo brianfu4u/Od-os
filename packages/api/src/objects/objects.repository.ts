@@ -8,6 +8,7 @@ import type {
   ObjectQuery,
   CreateLinkInput,
   ObjectTimeline,
+  ScanResolveResult,
 } from '@clearview/shared';
 import { withTenant } from '../database/tenant-context';
 
@@ -31,6 +32,17 @@ interface LinkRow {
   to_object: string;
   relation: string;
   created_at: string;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function labelOfProps(type: string, p: Record<string, unknown>): string {
+  return (
+    (typeof p.label === 'string' && p.label) ||
+    (typeof p.name === 'string' && p.name) ||
+    (typeof p.taskType === 'string' && p.taskType) ||
+    type
+  );
 }
 
 function mapObject(r: ObjectRow): OntologyObject {
@@ -108,6 +120,46 @@ export class ObjectsRepository {
         params,
       );
       return res.rows.map(mapObject);
+    });
+  }
+
+  /**
+   * T2 · resolve a scanned code to ONE object in this tenant (read-only). Tries an explicit object
+   * UUID first, then a stable business code (`properties.code`) or label. Runs inside withTenant() so
+   * RLS scopes the lookup to the caller's tenant — a code from another tenant resolves to null.
+   * Archived objects are excluded. No writes.
+   */
+  async resolveScan(tenantId: string, code: string): Promise<ScanResolveResult | null> {
+    const c0 = code.trim();
+    if (!c0) return null;
+    return withTenant(tenantId, async (c) => {
+      let row: ObjectRow | undefined;
+      if (UUID_RE.test(c0)) {
+        const byId = await c.query<ObjectRow>(
+          `SELECT * FROM objects WHERE id = $1 AND (properties->>'archived') IS DISTINCT FROM 'true' LIMIT 1`,
+          [c0],
+        );
+        row = byId.rows[0];
+      }
+      if (!row) {
+        const byCode = await c.query<ObjectRow>(
+          `SELECT * FROM objects
+             WHERE (properties->>'code' = $1 OR properties->>'label' = $1)
+               AND (properties->>'archived') IS DISTINCT FROM 'true'
+             ORDER BY created_at DESC
+             LIMIT 1`,
+          [c0],
+        );
+        row = byCode.rows[0];
+      }
+      if (!row) return null;
+      return {
+        objectId: row.id,
+        type: row.type,
+        label: labelOfProps(row.type, row.properties ?? {}),
+        verifiedState: row.verified_state,
+        confidence: row.confidence === null ? null : Number(row.confidence),
+      };
     });
   }
 

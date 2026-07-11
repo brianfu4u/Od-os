@@ -52,6 +52,17 @@ export class ObjectsController {
     return this.realtime.forTenant(tenantId).pipe(map((event) => ({ data: event })));
   }
 
+  /**
+   * T2 · scan-to-locate. Resolve a scanned QR/barcode payload to ONE object in this tenant
+   * (read-only, RLS-scoped — a code from another tenant resolves to null). Declared before ':id' so
+   * GET /objects/resolve is not captured as an id.
+   */
+  @Get('resolve')
+  async resolveScan(@TenantId() tenantId: string, @Query('code') code?: string) {
+    const resolved = await this.objects.resolveScan(tenantId, code ?? '');
+    return { resolved };
+  }
+
   @Get(':id')
   get(@TenantId() tenantId: string, @Param('id') id: string) {
     return this.objects.get(tenantId, id);

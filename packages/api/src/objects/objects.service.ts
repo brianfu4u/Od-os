@@ -7,6 +7,7 @@ import type {
   ObjectQuery,
   CreateLinkInput,
   ObjectTimeline,
+  ScanResolveResult,
 } from '@clearview/shared';
 import { ObjectsRepository } from './objects.repository';
 import { RealtimeService } from './realtime.service';
@@ -43,6 +44,11 @@ export class ObjectsService {
 
   list(tenantId: string, query: ObjectQuery): Promise<OntologyObject[]> {
     return this.repo.list(tenantId, query);
+  }
+
+  /** T2 · resolve a scanned code to one object in this tenant (read-only, RLS-scoped). */
+  resolveScan(tenantId: string, code: string): Promise<ScanResolveResult | null> {
+    return this.repo.resolveScan(tenantId, code);
   }
 
   /** P3 drill-down: object + its events + verification-ledger rows (tenant-scoped). */

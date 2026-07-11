@@ -84,3 +84,18 @@ export interface ObjectTimeline {
   events: TimelineEvent[];
   ledger: TimelineLedgerRow[];
 }
+
+/**
+ * T2 · scan-to-locate. The read-only resolution of a scanned QR/barcode payload to ONE object in the
+ * caller's tenant (GET /objects/resolve?code=). Tenant-scoped by RLS — a code that belongs to another
+ * tenant resolves to nothing. This never mutates anything; it only helps the terminal attach a report
+ * / evidence to the correct existing object.
+ */
+export interface ScanResolveResult {
+  objectId: string;
+  type: string;
+  /** Human label (properties.label / name / taskType, else the type). */
+  label: string;
+  verifiedState: string | null;
+  confidence: number | null;
+}
