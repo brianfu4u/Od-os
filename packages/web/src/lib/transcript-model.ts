@@ -1,5 +1,5 @@
 /**
- * Pure derivation of the voice-transcript UI from backend objects. Side-effect-free so it is
+ * Pure derivation of the voice-transcript UI from the scoped backend feed. Side-effect-free so it is
  * unit-testable in node (matches domain-model.ts) and the React components stay dumb.
  *
  * ⛔ MOAT (UI side): a transcript and its STT confidence are NEVER a verdict. This model keeps three
@@ -11,6 +11,7 @@
  * There is deliberately no path here that turns a transcript/STT confidence into a verified verdict.
  * Everything traces to a real backend field — nothing is fabricated (synthetic demo items are flagged).
  */
+import type { VoiceFeedRecord } from '@clearview/shared';
 
 export type TranscriptStatus = 'done' | 'low_confidence' | 'failed' | 'unavailable' | 'none';
 
@@ -24,18 +25,6 @@ export interface TranscriptData {
   model?: string | null;
   error?: string | null;
   at?: string | null;
-}
-
-/** A generic object row as returned by GET /objects (camelCase, per the API's mapObject). */
-export interface ObjectRow {
-  id: string;
-  type?: string;
-  properties?: Record<string, unknown>;
-  verifiedState?: string | null;
-  claimedState?: string | null;
-  confidence?: number | null;
-  createdAt?: string;
-  updatedAt?: string;
 }
 
 export type Tone = 'ok' | 'warn' | 'bad' | 'muted';
@@ -129,66 +118,48 @@ export interface TranscriptFeedItem {
   verdict: VerdictView | null;
 }
 
-function props(row: ObjectRow): Record<string, unknown> {
-  return row.properties && typeof row.properties === 'object' ? row.properties : {};
-}
-
-function isVoice(row: ObjectRow): boolean {
-  const p = props(row);
-  const kind = typeof p.kind === 'string' ? p.kind : '';
-  const mime = typeof p.mime === 'string' ? p.mime : '';
-  return kind === 'voice' || mime.startsWith('audio/');
-}
-
-function claimFrom(row: ObjectRow): ClaimView | null {
-  const p = props(row);
-  const llm = p.llm && typeof p.llm === 'object' ? (p.llm as Record<string, unknown>) : null;
-  const claim = llm?.claim && typeof llm.claim === 'object' ? (llm.claim as Record<string, unknown>) : null;
-  const claimedState = typeof claim?.claimedState === 'string' ? claim.claimedState : null;
+/**
+ * Derive the CLAIM from a voice Document's `properties.llm`. LLM1 writes both `llm.claim` (with the
+ * claimed_state) and `llm.classification` — the taskType is reliably on the classification, so we
+ * prefer `claim.taskType` and fall back to `classification.taskType` (else omit gracefully).
+ */
+function claimFrom(properties: Record<string, unknown>): ClaimView | null {
+  const llm = properties.llm && typeof properties.llm === 'object' ? (properties.llm as Record<string, unknown>) : null;
+  if (!llm) return null;
+  const claim = llm.claim && typeof llm.claim === 'object' ? (llm.claim as Record<string, unknown>) : null;
+  const claimedState = typeof claim?.claimedState === 'string' && claim.claimedState ? claim.claimedState : null;
   if (!claimedState) return null;
-  return { taskType: typeof claim?.taskType === 'string' ? claim.taskType : null, claimedState };
-}
-
-/** Map each Task's `claimedBy` (the voice Document id) → its verdict, for the provenance link. */
-function verdictMap(tasks: ObjectRow[]): Map<string, VerdictView> {
-  const map = new Map<string, VerdictView>();
-  for (const task of tasks) {
-    const claimedBy = props(task).claimedBy;
-    if (typeof claimedBy === 'string' && claimedBy && task.verifiedState) {
-      map.set(claimedBy, {
-        verifiedState: task.verifiedState,
-        confidence: typeof task.confidence === 'number' ? task.confidence : null,
-      });
-    }
-  }
-  return map;
+  const classification =
+    llm.classification && typeof llm.classification === 'object' ? (llm.classification as Record<string, unknown>) : null;
+  const taskType =
+    (typeof claim?.taskType === 'string' && claim.taskType) ||
+    (typeof classification?.taskType === 'string' && classification.taskType) ||
+    null;
+  return { taskType, claimedState };
 }
 
 /**
- * Build the transcript feed from the voice Documents (evidence) and Tasks (for the verdict link).
- * Only real backend data is used; synthetic demo items are appended ONLY when `synthetic` is true
- * (env-gated, off in production) and are flagged so the UI can badge them — they never leak silently.
+ * Build the transcript feed from the scoped backend records (GET /transcription/feed). The backend
+ * already restricts to the tenant's voice evidence and joins each transcript's Task verdict, so the
+ * client no longer pulls/filters full object lists. Synthetic demo items are appended ONLY when
+ * `synthetic` is true (env-gated, off in production) and are flagged so the UI can badge them.
  */
-export function buildTranscriptFeed(
-  voiceDocs: ObjectRow[],
-  tasks: ObjectRow[],
+export function buildFeed(
+  records: VoiceFeedRecord[],
   opts: { synthetic?: boolean; syntheticItems?: TranscriptFeedItem[] } = {},
 ): TranscriptFeedItem[] {
-  const verdicts = verdictMap(tasks);
-  const items: TranscriptFeedItem[] = voiceDocs
-    .filter(isVoice)
-    .map((doc) => {
-      const p = props(doc);
-      const view = transcriptView(p.transcript as TranscriptData | undefined);
-      return {
-        id: doc.id,
-        at: view.at ?? doc.updatedAt ?? doc.createdAt ?? null,
-        synthetic: false,
-        transcript: view,
-        claim: claimFrom(doc),
-        verdict: verdicts.get(doc.id) ?? null,
-      };
-    });
+  const items: TranscriptFeedItem[] = records.map((r) => {
+    const properties = r.properties && typeof r.properties === 'object' ? r.properties : {};
+    const view = transcriptView(properties.transcript as TranscriptData | undefined);
+    return {
+      id: r.objectId,
+      at: r.at ?? view.at ?? null,
+      synthetic: false,
+      transcript: view,
+      claim: claimFrom(properties),
+      verdict: r.verdict ?? null,
+    };
+  });
 
   if (opts.synthetic && opts.syntheticItems && opts.syntheticItems.length > 0) {
     items.push(...opts.syntheticItems);

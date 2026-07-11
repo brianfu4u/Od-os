@@ -11,6 +11,8 @@
  *   snapshot is attached, re-verify → verified @0.855. The transcript drove the whole pipeline.
  * Part C — APPEND-ONLY + TENANT ISOLATION: UPDATE on transcription_log is rejected (forbid_mutation),
  *   and a different tenant sees none of these transcriptions.
+ * Part D — SCOPED FEED (P7/T4-web follow-up): the read-only listVoiceFeed returns only the tenant's
+ *   voice docs joined to each transcript's Task verdict, and is RLS-isolated across tenants.
  */
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
@@ -98,7 +100,7 @@ async function main(): Promise<void> {
   const B = randomUUID();
 
   try {
-    console.log('T4 speech-to-text — moat + DoD loop:');
+    console.log('T4 speech-to-text — moat + DoD loop + scoped feed:');
 
     // ── Part A: MOAT ISOLATION (no verification subscriber) ──────────────────────────────
     const busA = new DomainEventBus();
@@ -163,6 +165,19 @@ async function main(): Promise<void> {
 
     const other = await admin.query<{ n: number }>(`SELECT count(*)::int AS n FROM transcription_log WHERE tenant_id=$1`, [B]);
     check((other.rows[0]?.n ?? 0) === 0, 'C: an untouched tenant has zero transcription_log rows (RLS isolation)');
+
+    // ── Part D: SCOPED VOICE FEED (read-only; verdict join; RLS isolation) ─────────────────
+    const feedA = await transcriptionRepo.listVoiceFeed(A);
+    check(feedA.length === 1 && feedA[0]!.objectId === voiceA, 'D: feed(A) returns exactly tenant A\'s voice doc');
+    check((feedA[0]!.properties.transcript as { status?: string } | undefined)?.status === 'done', 'D: feed carries the transcript on the doc properties');
+    check(feedA[0]!.verdict === null, 'D: feed(A) verdict is null (no verifier ran in Part A)');
+
+    const feedC = await transcriptionRepo.listVoiceFeed(C);
+    check(feedC.length === 1 && feedC[0]!.objectId === voiceC, 'D: feed(C) returns tenant C\'s voice doc');
+    check(feedC[0]!.verdict?.verifiedState === 'verified' && near(feedC[0]!.verdict?.confidence, 0.855), 'D: feed(C) verdict = verified@0.855 (joined from the driving Task)');
+
+    const feedB = await transcriptionRepo.listVoiceFeed(B);
+    check(feedB.length === 0, 'D: feed(B) is empty — RLS scopes the feed to the tenant');
   } finally {
     await admin.end();
     await closePool();

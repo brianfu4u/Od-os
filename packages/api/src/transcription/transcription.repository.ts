@@ -3,10 +3,12 @@
  * It NEVER writes the state triplet (no such method here) — the transcript is persisted as a derived
  * field via ObjectsService.update({ properties }) in the service, and the claim (if any) is applied
  * by LLM1. This repo only: loads the voice evidence to transcribe, appends the immutable
- * transcription_log audit row, and records a semantic transcript.* event for the live stream.
+ * transcription_log audit row, records a semantic transcript.* event, and (read-only) lists the
+ * tenant's voice transcripts + their verdict for the command-center feed.
  */
 import { Injectable } from '@nestjs/common';
 import type { PoolClient } from 'pg';
+import type { VoiceFeedRecord } from '@clearview/shared';
 import { withTenant } from '../database/tenant-context';
 import type { TranscriptionStatus } from './transcription.types';
 
@@ -75,6 +77,60 @@ export class TranscriptionRepository {
         `INSERT INTO events (tenant_id, object_id, event_type, payload, actor) VALUES ($1, $2, $3, $4::jsonb, 'transcription')`,
         [tenantId, objectId, eventType, JSON.stringify(payload)],
       );
+    });
+  }
+
+  /**
+   * Read-only, tenant-scoped feed for the command center: every voice evidence object plus the
+   * verdict of the Task its transcript's claim drove (latest such Task via a LATERAL join on
+   * `claimedBy`). Runs inside withTenant() so RLS scopes BOTH the documents and the joined tasks to
+   * the caller's tenant — a tenant can never see another tenant's transcripts or verdicts. This
+   * replaces the client pulling every Document + Task and filtering voice client-side.
+   */
+  listVoiceFeed(tenantId: string, limit = 100): Promise<VoiceFeedRecord[]> {
+    const capped = Math.min(Math.max(Math.trunc(limit) || 100, 1), 500);
+    return withTenant(tenantId, async (c) => {
+      const res = await c.query<{
+        id: string;
+        properties: Record<string, unknown>;
+        updated_at: string;
+        verdict_state: string | null;
+        verdict_conf: string | null;
+      }>(
+        `SELECT d.id, d.properties, d.updated_at,
+                v.verified_state AS verdict_state, v.confidence AS verdict_conf
+           FROM objects d
+           LEFT JOIN LATERAL (
+             SELECT t.verified_state, t.confidence
+               FROM objects t
+              WHERE t.type = 'Task' AND t.properties->>'claimedBy' = d.id::text
+              ORDER BY t.created_at DESC
+              LIMIT 1
+           ) v ON true
+          WHERE d.type IN ('Document', 'Snapshot')
+            AND d.properties->>'kind' = 'voice'
+          ORDER BY d.updated_at DESC
+          LIMIT $1`,
+        [capped],
+      );
+      return res.rows.map((r) => {
+        const p = r.properties ?? {};
+        const transcript = p.transcript && typeof p.transcript === 'object' ? (p.transcript as Record<string, unknown>) : null;
+        const at =
+          transcript && typeof transcript.at === 'string'
+            ? transcript.at
+            : r.updated_at
+              ? new Date(r.updated_at).toISOString()
+              : null;
+        return {
+          objectId: r.id,
+          at,
+          properties: p,
+          verdict: r.verdict_state
+            ? { verifiedState: r.verdict_state, confidence: r.verdict_conf === null ? null : Number(r.verdict_conf) }
+            : null,
+        };
+      });
     });
   }
 }

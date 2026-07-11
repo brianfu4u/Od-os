@@ -10,6 +10,7 @@
 import type {
   ActionLogRecord,
   ObjectTimeline,
+  OntologyObject,
   OverviewResult,
   RecommendationRecord,
   RecommendationStatus,
@@ -18,6 +19,7 @@ import type {
   StaffReportResult,
   UploadResult,
   VerificationResult,
+  VoiceFeedRecord,
 } from '@clearview/shared';
 import { API_BASE, DEV_TENANT_ID } from './config';
 
@@ -120,7 +122,8 @@ export function makeApi(auth?: string | ApiAuth) {
       return json(await fetch(`${API_BASE}/recommendations/sweep`, { method: 'POST', headers: authHeaders() }));
     },
 
-    async objects(type?: string, signal?: AbortSignal): Promise<Array<Record<string, unknown>>> {
+    /** List objects of a type. Returns the ontology shape the API maps (camelCase state triplet). */
+    async objects(type?: string, signal?: AbortSignal): Promise<OntologyObject[]> {
       const q = type ? `?type=${encodeURIComponent(type)}` : '';
       return json(await fetch(`${API_BASE}/objects${q}`, { headers: authHeaders(), signal }));
     },
@@ -128,6 +131,16 @@ export function makeApi(auth?: string | ApiAuth) {
     /** P3 drill-down: an object's full story (object + events + verification ledger). */
     async timeline(objectId: string, signal?: AbortSignal): Promise<ObjectTimeline> {
       return json(await fetch(`${API_BASE}/objects/${objectId}/timeline`, { headers: authHeaders(), signal }));
+    },
+
+    /**
+     * P7/T4: read-only, tenant-scoped voice-transcript feed (voice evidence + each transcript's
+     * verdict, joined server-side). Lets the command center render the voice panel without pulling
+     * every Document + Task.
+     */
+    async transcripts(limit?: number, signal?: AbortSignal): Promise<VoiceFeedRecord[]> {
+      const q = limit ? `?limit=${encodeURIComponent(String(limit))}` : '';
+      return json(await fetch(`${API_BASE}/transcription/feed${q}`, { headers: authHeaders(), signal }));
     },
 
     // ---- staff-console (WeChat Mini Program stand-in; dev tenant shim) ----
