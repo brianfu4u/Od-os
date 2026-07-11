@@ -8,7 +8,9 @@ export const SIZE_LIMITS: Record<'image' | 'audio' | 'doc', number> = {
   doc: 20 * MB,
 };
 
-// Content-type allowlist → category. Audio set covers WeChat voice formats (amr/m4a/aac).
+// Content-type allowlist → category. Audio set covers WeChat voice formats (amr/m4a/aac) AND the
+// browser MediaRecorder outputs used by T3 terminal recording (webm/opus on Chrome/Android, mp4 on
+// Safari).
 const MIME_CATEGORY: Record<string, 'image' | 'audio' | 'doc'> = {
   'image/jpeg': 'image',
   'image/png': 'image',
@@ -20,15 +22,22 @@ const MIME_CATEGORY: Record<string, 'image' | 'audio' | 'doc'> = {
   'audio/x-m4a': 'audio',
   'audio/wav': 'audio',
   'audio/webm': 'audio',
+  'audio/ogg': 'audio',
   'application/pdf': 'doc',
   'text/plain': 'doc',
   'application/msword': 'doc',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'doc',
 };
 
+/**
+ * Categorize a Content-Type. Strips any parameters (e.g. `audio/webm;codecs=opus`, which is exactly
+ * what MediaRecorder emits) and lower-cases before the allowlist lookup — a format兜底 so a valid
+ * recording is never rejected over a codec suffix.
+ */
 export function classifyMime(mime: string | undefined): 'image' | 'audio' | 'doc' | null {
   if (!mime) return null;
-  return MIME_CATEGORY[mime] ?? null;
+  const base = mime.split(';')[0]!.trim().toLowerCase();
+  return MIME_CATEGORY[base] ?? null;
 }
 
 /** Returns an error message, or null when the upload is acceptable. */
@@ -50,9 +59,10 @@ const VALID_SUBKINDS = new Set<string>(['photo', 'screenshot', 'voice', 'pdf', '
 /** Semantic sub-kind stored in properties.kind; a valid client `hint` wins (e.g. screenshot). */
 export function detectSubKind(mime: string, hint?: string): EvidenceSubKind | string {
   if (hint && VALID_SUBKINDS.has(hint)) return hint;
+  const base = mime.split(';')[0]!.trim().toLowerCase();
   const category = classifyMime(mime);
   if (category === 'image') return 'photo';
   if (category === 'audio') return 'voice';
-  if (mime === 'application/pdf') return 'pdf';
+  if (base === 'application/pdf') return 'pdf';
   return 'document';
 }

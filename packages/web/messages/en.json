@@ -327,5 +327,20 @@
     "manualHint": "If scanning isn't handy, type the room/asset code or object ID",
     "located": "Located",
     "notFound": "No object found for that code (it may belong to another clinic)"
+  },
+  "rec": {
+    "card": "Record & report",
+    "cardHint": "Record a short clip; it auto-transcribes and participates as a claim (visible in the command center).",
+    "title": "Recording",
+    "start": "Start recording",
+    "stop": "Stop",
+    "send": "Upload recording",
+    "again": "Re-record",
+    "unsupported": "This browser can't record audio — use another report method",
+    "denied": "Microphone permission denied — allow it in your browser and retry",
+    "error": "Couldn't record — retry",
+    "retry": "Retry",
+    "transcribing": "transcribing",
+    "hint": "Synthetic / demo audio only — never record real patient info. With no STT key the clip is still saved and the transcript is marked unavailable."
   }
 }
