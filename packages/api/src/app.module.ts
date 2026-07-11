@@ -12,6 +12,7 @@ import { RecommendationModule } from './recommendations/recommendation.module';
 import { OverviewModule } from './overview/overview.module';
 import { LearningModule } from './learning/learning.module';
 import { ListenerModule } from './listener/listener.module';
+import { TranscriptionModule } from './transcription/transcription.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ListenerModule } from './listener/listener.module';
     RecommendationModule,
     OverviewModule,
     ListenerModule,
+    TranscriptionModule,
   ],
   controllers: [HealthController],
 })
