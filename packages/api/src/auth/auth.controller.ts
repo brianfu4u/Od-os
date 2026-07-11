@@ -54,9 +54,11 @@ function assertStagingPassword(password: unknown): string {
 
 /**
  * Session issuance. Staff authenticate via WeChat (wx.login → code2session → openid → session);
- * managers via a login. The dev-login endpoints are the NODE_ENV-gated mock of that flow for
- * local/CI synthetic data — they 404 in production. No endpoint here trusts a client-supplied
- * tenant/staff for DATA access; they only MINT sessions, which the guard then trusts.
+ * managers via a real login + password (POST /auth/manager/login) that works in production. The
+ * dev-login endpoints are the NODE_ENV-gated mock of that flow for local/CI synthetic data — they
+ * 404 in production. No endpoint here trusts a client-supplied tenant/staff for DATA access; they
+ * only MINT sessions, which the guard then trusts — and the manager's tenant/role come from the
+ * server-side manager_identities row, never the request body.
  */
 @Controller('auth')
 export class AuthController {
@@ -119,7 +121,24 @@ export class AuthController {
     return { token, identity };
   }
 
-  /** DEV-ONLY mock manager login. 404 in production. Prod manager login (magic link/SSO) = TODO. */
+  /**
+   * PROD manager login — real credential authentication (login + password), usable in production.
+   * The password is checked (constant-time) against the stored scrypt hash; the tenant + role come
+   * from the server-side manager_identities row (never the client). Wrong/unknown credentials return
+   * a generic 401 with no user-enumeration. This is NOT NODE_ENV-gated — it is the intended pilot/
+   * production sign-in. (The wide-open manager/dev-login below stays 404 in production.)
+   */
+  @Post('manager/login')
+  async managerLogin(@Body() body: { login?: string; password?: string }, @Res({ passthrough: true }) res: HttpResponse) {
+    const login = typeof body?.login === 'string' ? body.login.trim() : '';
+    const password = typeof body?.password === 'string' ? body.password : '';
+    if (!login || !password) throw new BadRequestException('login and password are required');
+    const { token, identity } = await this.sessions.loginManager({ login, password });
+    setSessionCookie(res, token, 12 * 3600);
+    return { token, identity };
+  }
+
+  /** DEV-ONLY mock manager login. 404 in production. Prod manager login = POST /auth/manager/login. */
   @Post('manager/dev-login')
   async devManagerLogin(
     @Body() body: { tenantId?: string; login?: string; displayName?: string; role?: string },
