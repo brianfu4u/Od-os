@@ -63,8 +63,14 @@ export async function runHttpSmoke({
     })
   ).json();
   check(!!login.token && !!login.identity?.staffId, 'POST /auth/staff/dev-login issues a staff session');
-  const bySession = await fetch(`${base}/overview`, { headers: { Authorization: `Bearer ${login.token}` } });
-  check(bySession.ok, `GET /overview authorized by Bearer session, no X-Tenant-Id (got ${bySession.status})`);
+  // A Bearer session authenticates WITHOUT a self-reported X-Tenant-Id: hit a staff-accessible route
+  // (/objects) to prove the session's tenant is resolved server-side from the token alone.
+  const bySession = await fetch(`${base}/objects?type=Task`, { headers: { Authorization: `Bearer ${login.token}` } });
+  check(bySession.ok, `GET /objects authorized by Bearer session, no X-Tenant-Id (got ${bySession.status})`);
+  // #26 role hardening: /overview is a manager-only command-center view. A staff session must be
+  // rejected with 403 (authenticated, but not authorized) — the server is the authorization boundary.
+  const staffOnOverview = await fetch(`${base}/overview`, { headers: { Authorization: `Bearer ${login.token}` } });
+  check(staffOnOverview.status === 403, `staff session on manager-only /overview → 403 (got ${staffOnOverview.status})`);
   const meResp = await fetch(`${base}/auth/me`, { headers: { Authorization: `Bearer ${login.token}` } });
   const me = await meResp.json();
   check(me?.tenantId === tenant && me?.subject === 'staff', 'GET /auth/me returns the session identity');
