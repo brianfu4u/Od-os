@@ -143,13 +143,15 @@
       "task_update": "タスク更新",
       "event": "イベント",
       "evidence": "証拠",
-      "scan": "スキャン"
+      "scan": "スキャン",
+      "support_request": "応援要請"
     },
     "annScan": "スキャンを一級の検証証拠として取り込み",
     "annEvidence": "添付を証拠としてリンク",
     "annTask": "タスク状態を更新し再検証を実行",
     "annClock": "勤怠を記録",
-    "annDefault": "クロス検証に取り込み"
+    "annDefault": "クロス検証に取り込み",
+    "annSupport": "応援要請を作成し店長に通知"
   },
   "storage": {
     "label": "ローカル設定(localStorage フォールバックのデモ)",
@@ -396,5 +398,19 @@
     "assignee": "担当",
     "assignTo": "割り当て…",
     "staffEmpty": "割当可能な担当なし"
+  },
+  "support": {
+    "title": "応援要請",
+    "hint": "種類を選び内容を記入（対象の関連付けは任意）。指令センターに表示され、店長が対応できます。",
+    "notePlaceholder": "必要な応援を記入…",
+    "needNote": "応援内容を入力してください",
+    "link": "選択中の対象に関連付け",
+    "submit": "応援要請を送信",
+    "types": {
+      "supervisor": "上長",
+      "staff": "人手",
+      "equipment": "設備",
+      "other": "その他"
+    }
   }
 }

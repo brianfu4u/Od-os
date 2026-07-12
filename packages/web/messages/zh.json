@@ -142,13 +142,15 @@
       "task_update": "任务更新",
       "event": "事件",
       "evidence": "证据",
-      "scan": "扫码"
+      "scan": "扫码",
+      "support_request": "申请支援"
     },
     "annScan": "扫码已作为一等证据纳入验证",
     "annEvidence": "附件已作为证据链接",
     "annTask": "任务状态已更新,触发重新核实",
     "annClock": "考勤已记录",
-    "annDefault": "已纳入交叉验证"
+    "annDefault": "已纳入交叉验证",
+    "annSupport": "已生成支援请求，提示店长处理"
   },
   "footer": {
     "synthetic": "仅使用合成、隐私安全数据 — 不含任何真实患者信息(PHI)。",
@@ -387,5 +389,19 @@
     "assignee": "负责人",
     "assignTo": "指派给…",
     "staffEmpty": "无可指派员工"
+  },
+  "support": {
+    "title": "申请支援",
+    "hint": "选择类型并简述，可选关联当前对象；提交后进入命令中心，可被店长处理。",
+    "notePlaceholder": "简述需要什么支援…",
+    "needNote": "请填写支援简述",
+    "link": "关联当前所选对象",
+    "submit": "提交支援请求",
+    "types": {
+      "supervisor": "上级",
+      "staff": "人手",
+      "equipment": "设备",
+      "other": "其它"
+    }
   }
 }

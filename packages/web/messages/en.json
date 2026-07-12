@@ -143,13 +143,15 @@
       "task_update": "Task update",
       "event": "Event",
       "evidence": "Evidence",
-      "scan": "Scan"
+      "scan": "Scan",
+      "support_request": "Support"
     },
     "annScan": "Scan captured as first-class verification evidence",
     "annEvidence": "Attachment linked as evidence",
     "annTask": "Task state updated; re-verification triggered",
     "annClock": "Attendance recorded",
-    "annDefault": "Folded into cross-verification"
+    "annDefault": "Folded into cross-verification",
+    "annSupport": "Support request raised for a manager to handle"
   },
   "storage": {
     "label": "Local preference (localStorage fallback demo)",
@@ -396,5 +398,19 @@
     "assignee": "Assignee",
     "assignTo": "Assign to…",
     "staffEmpty": "No staff"
+  },
+  "support": {
+    "title": "Request support",
+    "hint": "Pick a type and describe it; optionally link the current object. It appears in the command center for a manager to handle.",
+    "notePlaceholder": "Describe what support you need…",
+    "needNote": "Please describe the support needed",
+    "link": "Link the selected object",
+    "submit": "Send support request",
+    "types": {
+      "supervisor": "Supervisor",
+      "staff": "Extra hands",
+      "equipment": "Equipment",
+      "other": "Other"
+    }
   }
 }
