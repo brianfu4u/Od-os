@@ -25,6 +25,7 @@ import type {
 } from './listener.types';
 import { buildAnalyzeMessages, buildSummarizeMessages } from './prompts';
 import { canonicalTaskType, detectLocale } from './listen-lex';
+import { metrics } from '../ops/metrics.registry';
 
 const DOMAINS: ListenDomain[] = ['patient_flow', 'staff', 'inventory', 'equipment', 'financial', 'marketing', 'general'];
 const EVENT_TYPES: ListenEventType[] = ['clock_in', 'clock_out', 'task_update', 'report', 'evidence', 'scan', 'support_request', 'anomaly', 'other'];
@@ -71,6 +72,9 @@ export class DeepSeekListener implements LlmListenerPort {
   private async chat(system: string, user: string): Promise<Record<string, unknown>> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    // Observability only (read-only counters): every DeepSeek API attempt + any failure. The API key
+    // is never recorded. A failure here is rethrown so analyze()/summarize() still fall back.
+    metrics.recordLlmCall();
     try {
       const res = await fetch(`${this.baseUrl}/chat/completions`, {
         method: 'POST',
@@ -91,6 +95,9 @@ export class DeepSeekListener implements LlmListenerPort {
       const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
       const content = data.choices?.[0]?.message?.content ?? '';
       return JSON.parse(content) as Record<string, unknown>;
+    } catch (err) {
+      metrics.recordLlmFailure();
+      throw err;
     } finally {
       clearTimeout(timer);
     }
