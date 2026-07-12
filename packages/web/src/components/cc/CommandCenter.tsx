@@ -14,6 +14,7 @@ import { LedgerPanel } from './LedgerPanel';
 import { CommsPanel } from './CommsPanel';
 import { TranscriptStream } from './TranscriptStream';
 import { OpsPanel } from './OpsPanel';
+import { AssignPanel } from './AssignPanel';
 
 function useClock(): string {
   const [now, setNow] = useState<Date | null>(null);
@@ -94,6 +95,9 @@ export function CommandCenter() {
             <OpsPanel />
           </div>
         </div>
+
+        {/* Manager task assignment (manager-only write path; server-enforced) */}
+        <AssignPanel />
 
         <footer className="border-t border-slate-800 pt-5 text-xs text-slate-500">
           <p>{t('footer.synthetic')}</p>

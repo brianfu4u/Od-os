@@ -379,5 +379,22 @@
     "recentErrors": "Recent errors",
     "noErrors": "No errors",
     "loading": "Loading…"
+  },
+  "assign": {
+    "title": "Task assignment",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…",
+    "loading": "Loading…",
+    "empty": "No tasks",
+    "newTask": "New task",
+    "labelPlaceholder": "Task label (e.g. Prep room 3)",
+    "taskTypePlaceholder": "Type (optional)",
+    "create": "Create",
+    "creating": "Creating…",
+    "needLabel": "Please enter a task label",
+    "unassigned": "Unassigned",
+    "assignee": "Assignee",
+    "assignTo": "Assign to…",
+    "staffEmpty": "No staff"
   }
 }
