@@ -1,6 +1,7 @@
 {
   "app": {
     "title": "Clearview 眼科 · 指挥中心",
+    "subtitle": "面向眼科诊所的实时运营系统",
     "badge": "实时 · 合成演示",
     "navConsole": "员工终端"
   },
@@ -151,6 +152,14 @@
     "annClock": "考勤已记录",
     "annDefault": "已纳入交叉验证",
     "annSupport": "已生成支援请求，提示店长处理"
+  },
+  "storage": {
+    "label": "本地偏好（localStorage 兜底演示）",
+    "note": "即使浏览器禁用存储，应用也不会崩溃（try/catch 兜底）。",
+    "available": "存储可用",
+    "unavailable": "存储不可用 — 已优雅降级",
+    "pick": "选择关注域：",
+    "saved": "已保存偏好：{value}"
   },
   "footer": {
     "synthetic": "仅使用合成、隐私安全数据 — 不含任何真实患者信息(PHI)。",
