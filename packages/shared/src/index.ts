@@ -16,3 +16,4 @@ export * from './api/recommendation.contract';
 export * from './api/overview.contract';
 export * from './api/learning.contract';
 export * from './api/transcription.contract';
+export * from './api/ops.contract';

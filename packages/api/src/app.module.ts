@@ -14,6 +14,7 @@ import { LearningModule } from './learning/learning.module';
 import { ListenerModule } from './listener/listener.module';
 import { TranscriptionModule } from './transcription/transcription.module';
 import { TasksModule } from './tasks/tasks.module';
+import { OpsModule } from './ops/ops.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { TasksModule } from './tasks/tasks.module';
     ListenerModule,
     TranscriptionModule,
     TasksModule,
+    OpsModule,
   ],
   controllers: [HealthController],
 })
