@@ -356,5 +356,28 @@
     "picked": "対象に設定",
     "loadFailed": "マイタスクの読み込みに失敗",
     "claimed": "申告"
+  },
+  "ops": {
+    "title": "運用",
+    "refresh": "更新",
+    "refreshing": "更新中…",
+    "db": "DB",
+    "ok": "正常",
+    "down": "異常",
+    "uptime": "稼働時間",
+    "requests": "リクエスト",
+    "errorRate": "エラー率",
+    "verifies": "判定呼び出し",
+    "callsFails": "呼出/失敗",
+    "sweeps": "スイープ",
+    "tenantActivity": "店舗の活動（直近{hours}時間）",
+    "reports": "報告",
+    "verdicts": "判定",
+    "transcriptions": "文字起こし",
+    "llmAnalyses": "LLM分析",
+    "actions": "アクション",
+    "recentErrors": "最近のエラー",
+    "noErrors": "エラーなし",
+    "loading": "読み込み中…"
   }
 }

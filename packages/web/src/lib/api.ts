@@ -12,6 +12,7 @@ import type {
   MyTaskSummary,
   ObjectTimeline,
   OntologyObject,
+  OpsSummary,
   OverviewResult,
   RecommendationRecord,
   RecommendationStatus,
@@ -161,6 +162,14 @@ export function makeApi(auth?: string | ApiAuth) {
     async transcripts(limit?: number, signal?: AbortSignal): Promise<VoiceFeedRecord[]> {
       const q = limit ? `?limit=${encodeURIComponent(String(limit))}` : '';
       return json(await fetch(`${API_BASE}/transcription/feed${q}`, { headers: authHeaders(), signal }));
+    },
+
+    /**
+     * Ops observability: manager-only, read-only summary (deploy version + DB health + process
+     * metrics + recent errors + tenant-scoped activity counts). Server enforces manager via RolesGuard.
+     */
+    async opsSummary(signal?: AbortSignal): Promise<OpsSummary> {
+      return json(await fetch(`${API_BASE}/ops/summary`, { headers: authHeaders(), signal }));
     },
 
     // ---- staff-console (WeChat Mini Program stand-in; dev tenant shim) ----
