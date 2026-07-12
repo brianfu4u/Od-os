@@ -9,6 +9,9 @@
  */
 import type {
   ActionLogRecord,
+  AssignmentOverview,
+  AssignmentResult,
+  CreateTaskInput,
   MyTaskSummary,
   ObjectTimeline,
   OntologyObject,
@@ -170,6 +173,36 @@ export function makeApi(auth?: string | ApiAuth) {
      */
     async opsSummary(signal?: AbortSignal): Promise<OpsSummary> {
       return json(await fetch(`${API_BASE}/ops/summary`, { headers: authHeaders(), signal }));
+    },
+
+    /**
+     * Manager task assignment (manager-only): this tenant's tasks (+ current assignee) and the staff
+     * they can be assigned to. Server enforces manager via RolesGuard + scopes by RLS.
+     */
+    async assignmentOverview(signal?: AbortSignal): Promise<AssignmentOverview> {
+      return json(await fetch(`${API_BASE}/assignments/overview`, { headers: authHeaders(), signal }));
+    },
+
+    /** Assign/reassign a task to a staff member in this tenant (manager-only). */
+    async assignTask(taskId: string, staffId: string): Promise<AssignmentResult> {
+      return json(
+        await fetch(`${API_BASE}/assignments/assign`, {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ taskId, staffId }),
+        }),
+      );
+    },
+
+    /** Create a task, optionally assigning it immediately (manager-only). Never writes verified_state. */
+    async createTask(input: CreateTaskInput): Promise<AssignmentResult> {
+      return json(
+        await fetch(`${API_BASE}/assignments/tasks`, {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(input),
+        }),
+      );
     },
 
     // ---- staff-console (WeChat Mini Program stand-in; dev tenant shim) ----

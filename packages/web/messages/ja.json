@@ -379,5 +379,22 @@
     "recentErrors": "最近のエラー",
     "noErrors": "エラーなし",
     "loading": "読み込み中…"
+  },
+  "assign": {
+    "title": "タスク割り当て",
+    "refresh": "更新",
+    "refreshing": "更新中…",
+    "loading": "読み込み中…",
+    "empty": "タスクなし",
+    "newTask": "新規タスク",
+    "labelPlaceholder": "タスク名（例：3番室を準備）",
+    "taskTypePlaceholder": "種類（任意）",
+    "create": "作成",
+    "creating": "作成中…",
+    "needLabel": "タスク名を入力してください",
+    "unassigned": "未割り当て",
+    "assignee": "担当",
+    "assignTo": "割り当て…",
+    "staffEmpty": "割当可能な担当なし"
   }
 }

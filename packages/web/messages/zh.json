@@ -370,5 +370,22 @@
     "recentErrors": "近期错误",
     "noErrors": "暂无错误",
     "loading": "加载中…"
+  },
+  "assign": {
+    "title": "任务指派",
+    "refresh": "刷新",
+    "refreshing": "刷新中…",
+    "loading": "加载中…",
+    "empty": "暂无任务",
+    "newTask": "新建任务",
+    "labelPlaceholder": "任务标题（如：备好3号房）",
+    "taskTypePlaceholder": "类型（可选）",
+    "create": "新建",
+    "creating": "新建中…",
+    "needLabel": "请填写任务标题",
+    "unassigned": "未指派",
+    "assignee": "负责人",
+    "assignTo": "指派给…",
+    "staffEmpty": "无可指派员工"
   }
 }
