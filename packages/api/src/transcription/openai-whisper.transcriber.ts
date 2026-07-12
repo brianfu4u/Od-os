@@ -12,6 +12,7 @@
  */
 import { Logger } from '@nestjs/common';
 import type { TranscribeInput, TranscriptionResult, Transcriber } from './transcription.types';
+import { metrics } from '../ops/metrics.registry';
 
 interface WhisperSegment {
   avg_logprob?: number;
@@ -64,6 +65,9 @@ export class OpenAiWhisperTranscriber implements Transcriber {
   async transcribe(input: TranscribeInput): Promise<TranscriptionResult> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    // Observability only (read-only counters): every STT attempt + any failure. The API key and the
+    // audio bytes/transcript are never recorded.
+    metrics.recordSttCall();
     try {
       const form = new FormData();
       const blob = new Blob([input.bytes], { type: input.mime || 'application/octet-stream' });
@@ -83,6 +87,7 @@ export class OpenAiWhisperTranscriber implements Transcriber {
       const data = (await res.json()) as WhisperVerboseResponse;
       const text = typeof data.text === 'string' ? data.text.trim() : '';
       if (!text) {
+        metrics.recordSttFailure();
         return { status: 'failed', text: null, language: data.language ?? null, confidence: null, provider: this.name, model: this.model, error: 'empty transcript' };
       }
       return {
@@ -94,6 +99,7 @@ export class OpenAiWhisperTranscriber implements Transcriber {
         model: this.model,
       };
     } catch (err) {
+      metrics.recordSttFailure();
       const message = err instanceof Error ? err.message : String(err);
       this.logger.warn(`Whisper transcription failed (retryable): ${message}`);
       return { status: 'failed', text: null, language: null, confidence: null, provider: this.name, model: this.model, error: message };

@@ -69,6 +69,29 @@ export async function closePool(): Promise<void> {
 }
 
 /**
+ * Read-only DB liveness ping for /health/ready. Runs `SELECT 1` on the runtime (least-privilege)
+ * pool and returns { ok, latencyMs }. NEVER throws — a failure is reported as { ok:false, error }
+ * so readiness can degrade (503) without taking the process down. No tenant context, no business
+ * data — purely a connectivity probe.
+ */
+export async function pingDatabase(
+  p: Pool = getPool(),
+): Promise<{ ok: boolean; latencyMs: number | null; error?: string }> {
+  const start = Date.now();
+  try {
+    const client = await p.connect();
+    try {
+      await client.query('SELECT 1');
+      return { ok: true, latencyMs: Date.now() - start };
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    return { ok: false, latencyMs: null, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
  * Startup safety gate: refuse to run if the app's DB role can bypass Row-Level Security.
  * A superuser, a BYPASSRLS role, or the owner of a tenant table would silently see EVERY
  * tenant's rows — the exact cross-tenant leak RLS exists to prevent. Called at boot; throwing

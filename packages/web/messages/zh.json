@@ -347,5 +347,28 @@
     "picked": "已选为对象",
     "loadFailed": "加载我的任务失败",
     "claimed": "声称"
+  },
+  "ops": {
+    "title": "运维",
+    "refresh": "刷新",
+    "refreshing": "刷新中…",
+    "db": "数据库",
+    "ok": "正常",
+    "down": "异常",
+    "uptime": "运行时长",
+    "requests": "请求数",
+    "errorRate": "错误率",
+    "verifies": "判决调用",
+    "callsFails": "调用/失败",
+    "sweeps": "扫描次数",
+    "tenantActivity": "本店活动（近 {hours} 小时）",
+    "reports": "上报",
+    "verdicts": "判决",
+    "transcriptions": "转写",
+    "llmAnalyses": "LLM 分析",
+    "actions": "动作",
+    "recentErrors": "近期错误",
+    "noErrors": "暂无错误",
+    "loading": "加载中…"
   }
 }

@@ -3,6 +3,8 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { assertRuntimeRoleSafe } from './database/pool';
 import { assertProductionSecurity, resolveCorsOptions } from './config/security';
+import { MetricsInterceptor } from './ops/metrics.interceptor';
+import { AllExceptionsFilter } from './ops/all-exceptions.filter';
 
 async function bootstrap(): Promise<void> {
   // P5.1 fail-closed gate: in production, refuse to start when TLS is explicitly disabled
@@ -18,6 +20,13 @@ async function bootstrap(): Promise<void> {
   // table owner). This makes "app connected as a privileged role" a hard boot failure, not a
   // silent cross-tenant leak. The app must connect as the least-privilege clearview_login role.
   await assertRuntimeRoleSafe();
+
+  // Ops observability (read-only): a global interceptor records per-request metrics + a structured,
+  // body-free access log (with a request id echoed as X-Request-Id), and a global exception filter
+  // records/redacts errors and returns a sanitized response. Both use the in-memory metrics
+  // singleton; neither touches business state.
+  app.useGlobalInterceptors(new MetricsInterceptor());
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   // CORS: production restricts to the env allow-list (CORS_ORIGIN / CORS_ALLOWED_ORIGINS,
   // comma-separated) — no "*" wildcard and no reflecting arbitrary origins (enforced fail-closed by

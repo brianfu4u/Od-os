@@ -356,5 +356,28 @@
     "picked": "Picked as subject",
     "loadFailed": "Failed to load my tasks",
     "claimed": "claimed"
+  },
+  "ops": {
+    "title": "Ops",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…",
+    "db": "DB",
+    "ok": "OK",
+    "down": "Down",
+    "uptime": "Uptime",
+    "requests": "Requests",
+    "errorRate": "Error rate",
+    "verifies": "Verifies",
+    "callsFails": "calls/fails",
+    "sweeps": "Sweeps",
+    "tenantActivity": "This clinic · last {hours}h",
+    "reports": "Reports",
+    "verdicts": "Verdicts",
+    "transcriptions": "Transcriptions",
+    "llmAnalyses": "LLM analyses",
+    "actions": "Actions",
+    "recentErrors": "Recent errors",
+    "noErrors": "No errors",
+    "loading": "Loading…"
   }
 }

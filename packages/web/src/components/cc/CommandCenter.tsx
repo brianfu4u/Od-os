@@ -13,6 +13,7 @@ import { CueFeed } from './CueFeed';
 import { LedgerPanel } from './LedgerPanel';
 import { CommsPanel } from './CommsPanel';
 import { TranscriptStream } from './TranscriptStream';
+import { OpsPanel } from './OpsPanel';
 
 function useClock(): string {
   const [now, setNow] = useState<Date | null>(null);
@@ -85,11 +86,12 @@ export function CommandCenter() {
             onSnooze={snooze}
           />
 
-          {/* RIGHT — ledger + comms + voice transcripts (STT «listen» layer, live) */}
+          {/* RIGHT — ledger + comms + voice transcripts (STT «listen» layer, live) + ops */}
           <div className="space-y-5">
             <LedgerPanel ledger={overview?.ledger ?? []} />
             <CommsPanel comms={overview?.comms ?? []} />
             <TranscriptStream items={transcripts} onRetry={retryTranscription} />
+            <OpsPanel />
           </div>
         </div>
 
