@@ -240,7 +240,11 @@
     "storageWarning": "ローカルストレージが利用できません:ログイン状態は保持されません(動作は継続します)。",
     "password": "パスワード",
     "stagingSubtitle": "Staging:マネージャーのパスワードで入場(合成データ)。",
-    "stagingNote": "Staging は単一の共有パスワード(サーバ env で制御、本番では無認証 dev-login は無効)。合成データのみ。"
+    "stagingNote": "Staging は単一の共有パスワード(サーバ env で制御、本番では無認証 dev-login は無効)。合成データのみ。",
+    "credentialSubtitle": "管理者アカウントとパスワードで指令センターにサインイン",
+    "loginId": "ログインID",
+    "loginIdPlaceholder": "例: dana@riverside",
+    "credentialNote": "セッションは12時間で失効し、いつでもログアウトできます。パスワードはサーバー側でハッシュ照合し、平文で保存・記録しません。"
   },
   "shell": {
     "tag": "管理者",

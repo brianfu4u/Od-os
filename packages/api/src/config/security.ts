@@ -1,7 +1,7 @@
 /**
  * P5.1 · Production security hardening — pure, side-effect-free resolvers + a fail-closed boot guard.
  *
- * Two gates that MUST close before any real (PHI) data is connected, enforced STRUCTURALLY
+ * Gates that MUST close before any real (PHI) data is connected, enforced STRUCTURALLY
  * ("fail-closed"), not by "remembering to set an env var":
  *   1. DB TLS: production connects to Postgres with verification (rejectUnauthorized=true ⇒ chain +
  *      hostname checked). DATABASE_CA_CERT is an OPTIONAL override — when absent, the connection
@@ -10,13 +10,18 @@
  *      rejectUnauthorized=false.
  *   2. CORS: production uses an explicit allow-list from the environment. No "*" wildcard, no
  *      reflecting arbitrary Origins.
- * `assertProductionSecurity()` refuses to boot when production is misconfigured (TLS explicitly
- * disabled, or an empty/invalid CORS allow-list) so a misconfig is a hard failure, not a silent
- * downgrade. A missing CA is NOT a misconfig — public-CA verification is the safe default.
+ *   3. Manager auth (feat/manager-auth): if the synthetic manager seed is enabled in production
+ *      (MANAGER_SEED_LOGIN set), it must carry a strong password + valid tenant; and if a password
+ *      pepper is set (AUTH_PASSWORD_PEPPER) it must be long enough to be meaningful. A weak/partial
+ *      manager-auth config is a hard boot failure, never a silent weak credential.
+ * `assertProductionSecurity()` refuses to boot when production is misconfigured so a misconfig is a
+ * hard failure, not a silent downgrade. A missing CA / unset seed / unset pepper are NOT misconfigs
+ * (they are the safe defaults).
  *
  * These functions take `env` explicitly (default `process.env`) so they are deterministically
- * unit-testable in node without mutating global state — and they touch ONLY the DB connection layer
- * and CORS bootstrap; the RLS / withTenant / clearview_app model is untouched.
+ * unit-testable in node without mutating global state — and they touch ONLY the DB connection layer,
+ * CORS bootstrap, and auth config validation; the RLS / withTenant / clearview_app model, the moat
+ * (applyClaim → claimed_state only), and the verified_state engine are all untouched.
  */
 
 type Env = Record<string, string | undefined>;
@@ -34,6 +39,11 @@ export interface CorsResolved {
 
 const CORS_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
 const CORS_ALLOWED_HEADERS = ['Content-Type', 'Authorization', 'X-Tenant-Id'];
+
+/** Minimum lengths for manager-auth secrets in production (Gate 3). */
+const MIN_SEED_PASSWORD_LEN = 12;
+const MIN_PEPPER_LEN = 16;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isProd(env: Env): boolean {
   return env.NODE_ENV === 'production';
@@ -82,8 +92,6 @@ export function resolveDbSsl(connectionString: string, env: Env = process.env): 
   const ca = env.DATABASE_CA_CERT?.trim() || undefined;
 
   if (isProd(env)) {
-    // verify-full: rejectUnauthorized=true makes tls.connect check the chain; pg sets servername
-    // from the host, so the hostname is verified too. CA is optional (public-CA store by default).
     return ca ? { rejectUnauthorized: true, ca } : { rejectUnauthorized: true };
   }
 
@@ -111,11 +119,47 @@ export function resolveCorsOptions(env: Env = process.env): CorsResolved {
 }
 
 /**
- * Fail-closed boot guard. In production, throws (aborting startup) when either gate is misconfigured.
+ * Gate 3 (pure): manager-auth config problems in production. Empty array ⇒ OK.
+ *  - Manager seed is OPTIONAL. But if it is switched on (MANAGER_SEED_LOGIN present), it must be
+ *    complete + strong: a password of at least MIN_SEED_PASSWORD_LEN chars and a valid tenant uuid —
+ *    otherwise a fresh prod deploy would seed a manager with a weak/parameter-missing credential.
+ *  - AUTH_PASSWORD_PEPPER is OPTIONAL, but if set it must be at least MIN_PEPPER_LEN chars (a short
+ *    pepper is security theater).
+ * Returns problems only in production; a no-op elsewhere.
+ */
+export function managerAuthProblems(env: Env = process.env): string[] {
+  if (!isProd(env)) return [];
+  const problems: string[] = [];
+
+  const seedLogin = env.MANAGER_SEED_LOGIN?.trim();
+  if (seedLogin) {
+    const pw = env.MANAGER_SEED_PASSWORD ?? '';
+    const tenant = env.MANAGER_SEED_TENANT_ID?.trim() ?? '';
+    if (pw.length < MIN_SEED_PASSWORD_LEN) {
+      problems.push(
+        `MANAGER_SEED_LOGIN is set but MANAGER_SEED_PASSWORD is missing or shorter than ${MIN_SEED_PASSWORD_LEN} chars — ` +
+          'the seeded manager credential must be strong (or unset all MANAGER_SEED_* to disable seeding).',
+      );
+    }
+    if (!UUID_RE.test(tenant)) {
+      problems.push('MANAGER_SEED_LOGIN is set but MANAGER_SEED_TENANT_ID is not a valid uuid.');
+    }
+  }
+
+  const pepper = env.AUTH_PASSWORD_PEPPER?.trim();
+  if (pepper !== undefined && pepper.length > 0 && pepper.length < MIN_PEPPER_LEN) {
+    problems.push(`AUTH_PASSWORD_PEPPER is set but shorter than ${MIN_PEPPER_LEN} chars — use a long random value or unset it.`);
+  }
+
+  return problems;
+}
+
+/**
+ * Fail-closed boot guard. In production, throws (aborting startup) when any gate is misconfigured.
  * A no-op outside production so dev/CI are unaffected. Call once at bootstrap before listening.
  *
- * Note: a missing DATABASE_CA_CERT is intentionally NOT a failure — production still verifies TLS
- * against the system/public CA store. The CA is only an optional override to pin a private CA.
+ * Note: a missing DATABASE_CA_CERT is intentionally NOT a failure (public-CA verification is the safe
+ * default), and unset MANAGER_SEED_* / AUTH_PASSWORD_PEPPER are NOT failures (they are optional).
  */
 export function assertProductionSecurity(env: Env = process.env): void {
   if (!isProd(env)) return;
@@ -144,10 +188,12 @@ export function assertProductionSecurity(env: Env = process.env): void {
     }
   }
 
+  // ── Gate 3: manager-auth secrets (feat/manager-auth) ──
+  problems.push(...managerAuthProblems(env));
+
   if (problems.length > 0) {
     throw new Error(
-      'Refusing to start — P5.1 production security gates failed:\n' +
-        problems.map((p) => `  • ${p}`).join('\n'),
+      'Refusing to start — P5.1 production security gates failed:\n' + problems.map((p) => `  • ${p}`).join('\n'),
     );
   }
 }

@@ -89,7 +89,7 @@ export class SessionStore {
     const c = await getPool().connect();
     try {
       const res = await c.query<ManagerIdentityRow>(
-        `SELECT login, tenant_id, manager_id, role FROM manager_identities WHERE login = $1 LIMIT 1`,
+        `SELECT login, tenant_id, manager_id, role, password_hash FROM manager_identities WHERE login = $1 LIMIT 1`,
         [login],
       );
       return res.rows[0] ?? null;
@@ -106,6 +106,23 @@ export class SessionStore {
          VALUES ($1, $2, $3, $4)
          ON CONFLICT (login) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, manager_id = EXCLUDED.manager_id, role = EXCLUDED.role`,
         [row.login, row.tenantId, row.managerId, row.role],
+      );
+    } finally {
+      c.release();
+    }
+  }
+
+  /**
+   * Set/rotate a manager's credential hash (0012). Stores ONLY the scrypt-encoded hash, never a
+   * plaintext password, and stamps password_updated_at. Uses the same clearview_login UPDATE grant
+   * as upsertManagerIdentity — no new privilege.
+   */
+  async setManagerPassword(login: string, passwordHash: string): Promise<void> {
+    const c = await getPool().connect();
+    try {
+      await c.query(
+        `UPDATE manager_identities SET password_hash = $2, password_updated_at = now() WHERE login = $1`,
+        [login, passwordHash],
       );
     } finally {
       c.release();

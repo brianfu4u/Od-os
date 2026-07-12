@@ -2,17 +2,21 @@ import { Global, Module } from '@nestjs/common';
 import { AuthController } from './auth.controller';
 import { SessionService } from './session.service';
 import { SessionStore } from './session.store';
+import { ManagerSeedService } from './manager-seed.service';
 import { TenantGuard } from '../tenant/tenant.guard';
 
 /**
  * @Global so `TenantGuard` (which now depends on SessionService) resolves wherever a controller
  * does `@UseGuards(TenantGuard)` — reports, uploads, objects, overview, recommendations — without
- * each module re-registering it.
+ * each module re-registering it. RolesGuard depends only on Reflector (Nest core), so it needs no
+ * provider registration; controllers list it directly in @UseGuards after TenantGuard.
+ *
+ * ManagerSeedService runs the idempotent, env-gated synthetic manager seed at bootstrap.
  */
 @Global()
 @Module({
   controllers: [AuthController],
-  providers: [SessionStore, SessionService, TenantGuard],
+  providers: [SessionStore, SessionService, ManagerSeedService, TenantGuard],
   exports: [SessionStore, SessionService, TenantGuard],
 })
 export class AuthModule {}

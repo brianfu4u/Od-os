@@ -231,7 +231,11 @@
     "storageWarning": "本地存储不可用:登录状态不会被记住(应用仍可正常使用)。",
     "password": "登录口令",
     "stagingSubtitle": "Staging 环境:输入经理登录口令进入(合成数据)。",
-    "stagingNote": "Staging 用单一口令登录(服务端 env 控制,生产不放开无鉴权 dev-login);仅合成数据。"
+    "stagingNote": "Staging 用单一口令登录(服务端 env 控制,生产不放开无鉴权 dev-login);仅合成数据。",
+    "credentialSubtitle": "用管理员账号与密码登录命令中心",
+    "loginId": "登录账号",
+    "loginIdPlaceholder": "如 dana@riverside",
+    "credentialNote": "会话 12 小时后过期，可随时登出。密码仅在服务端以哈希校验，绝不明文存储或记录。"
   },
   "shell": {
     "tag": "管理端",

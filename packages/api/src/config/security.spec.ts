@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assertProductionSecurity,
   isValidOrigin,
+  managerAuthProblems,
   parseCorsAllowList,
   resolveCorsOptions,
   resolveDbSsl,
@@ -10,6 +11,7 @@ import {
 const HOSTED = 'postgresql://u:p@db.example.com:5432/clearview_od';
 const LOCAL = 'postgresql://postgres:postgres@localhost:5432/clearview_od';
 const PEM = '-----BEGIN CERTIFICATE-----\nMIID...\n-----END CERTIFICATE-----';
+const TENANT = '11111111-1111-1111-1111-111111111111';
 
 const prod = (over: Record<string, string | undefined> = {}) => ({ NODE_ENV: 'production', ...over });
 
@@ -90,6 +92,46 @@ describe('assertProductionSecurity — fail-closed boot guard', () => {
 
   it('throws when a CORS entry is not a bare origin', () => {
     expect(() => assertProductionSecurity(prod({ DATABASE_CA_CERT: PEM, CORS_ORIGIN: 'https://app.example.com/app' }))).toThrow(/valid origin/);
+  });
+});
+
+describe('managerAuthProblems — Gate 3 (feat/manager-auth)', () => {
+  it('is a no-op outside production', () => {
+    expect(managerAuthProblems({ NODE_ENV: 'development', MANAGER_SEED_LOGIN: 'x', MANAGER_SEED_PASSWORD: 'short' })).toEqual([]);
+  });
+
+  it('production with neither seed nor pepper → OK (both optional)', () => {
+    expect(managerAuthProblems(prod())).toEqual([]);
+  });
+
+  it('production + enabled seed with a strong password + valid tenant → OK', () => {
+    expect(
+      managerAuthProblems(prod({ MANAGER_SEED_LOGIN: 'dana', MANAGER_SEED_PASSWORD: 'a-strong-seed-pw', MANAGER_SEED_TENANT_ID: TENANT })),
+    ).toEqual([]);
+  });
+
+  it('production + seed with a weak/missing password → flagged', () => {
+    expect(
+      managerAuthProblems(prod({ MANAGER_SEED_LOGIN: 'dana', MANAGER_SEED_PASSWORD: 'short', MANAGER_SEED_TENANT_ID: TENANT })),
+    ).toHaveLength(1);
+    expect(managerAuthProblems(prod({ MANAGER_SEED_LOGIN: 'dana', MANAGER_SEED_TENANT_ID: TENANT }))[0]).toMatch(/MANAGER_SEED_PASSWORD/);
+  });
+
+  it('production + seed with an invalid tenant uuid → flagged', () => {
+    expect(
+      managerAuthProblems(prod({ MANAGER_SEED_LOGIN: 'dana', MANAGER_SEED_PASSWORD: 'a-strong-seed-pw', MANAGER_SEED_TENANT_ID: 'nope' })),
+    )[0]!.match(/MANAGER_SEED_TENANT_ID/);
+  });
+
+  it('production + short pepper → flagged; long pepper → OK', () => {
+    expect(managerAuthProblems(prod({ AUTH_PASSWORD_PEPPER: 'short' }))).toHaveLength(1);
+    expect(managerAuthProblems(prod({ AUTH_PASSWORD_PEPPER: 'a-sufficiently-long-pepper-value' }))).toEqual([]);
+  });
+
+  it('is folded into assertProductionSecurity (weak seed aborts boot even with good TLS/CORS)', () => {
+    expect(() =>
+      assertProductionSecurity(prod({ CORS_ORIGIN: 'https://app.example.com', MANAGER_SEED_LOGIN: 'dana', MANAGER_SEED_PASSWORD: 'short', MANAGER_SEED_TENANT_ID: TENANT })),
+    ).toThrow(/MANAGER_SEED_PASSWORD/);
   });
 });
 

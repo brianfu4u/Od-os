@@ -1,8 +1,9 @@
 /**
  * Sessions for the web clients. Wraps the P1 auth endpoints. In dev/local we sign in via the
  * NODE_ENV-gated mock logins (404 in prod); on staging (NODE_ENV=production) we use the env-gated,
- * password-protected staging logins. The session TOKEN drives the tenant — the client never sends a
- * self-reported tenant for data. Tokens persist through the never-throws safe-storage. The manager
+ * password-protected staging logins; in real production the command center uses the manager
+ * CREDENTIAL login (login + password). The session TOKEN drives the tenant — the client never sends
+ * a self-reported tenant for data. Tokens persist through the never-throws safe-storage. The manager
  * (command center) and staff (terminal) tokens use SEPARATE keys so both can be used in one browser.
  */
 import { API_BASE } from './config';
@@ -47,6 +48,10 @@ async function post(path: string, payload: Record<string, unknown>): Promise<Ses
 }
 
 // ── Manager (command center) ────────────────────────────────────────────────
+/** PROD manager login: real credential (login + password). Tenant + role come from the server. */
+export function managerLogin(login: string, password: string): Promise<Session> {
+  return post('/auth/manager/login', { login, password });
+}
 /** Dev-gated mock manager login → issues a session bound to {tenant, role}. */
 export function managerDevLogin(tenantId: string, login: string, displayName?: string): Promise<Session> {
   return post('/auth/manager/dev-login', { tenantId, login, displayName });

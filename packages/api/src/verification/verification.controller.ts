@@ -1,9 +1,21 @@
 import { BadRequestException, Body, Controller, NotFoundException, Param, Post, UseGuards } from '@nestjs/common';
 import { TenantGuard } from '../tenant/tenant.guard';
+import { RolesGuard } from '../tenant/roles.guard';
+import { Roles } from '../tenant/roles.decorator';
 import { TenantId } from '../tenant/tenant.decorator';
 import { VerificationService } from './verification.service';
 
-@UseGuards(TenantGuard)
+/**
+ * The management verification actions — a manual verdict correction (human-in-the-loop) and a
+ * tenant-wide re-verification sweep — require a MANAGER session (server-side, per method).
+ *
+ * `POST objects/:id/verify` is intentionally NOT manager-gated: it re-runs the DETERMINISTIC S2
+ * engine on a single object (it computes verified_state from evidence — it does not accept a
+ * human-supplied verdict), and the staff console (StaffConsole.tsx) calls it to show live
+ * cross-verification. It stays open to any authenticated caller; correcting a verdict by hand
+ * (which overrides the engine) is the privileged action and IS manager-gated.
+ */
+@UseGuards(TenantGuard, RolesGuard)
 @Controller()
 export class VerificationController {
   constructor(private readonly verification: VerificationService) {}
@@ -15,8 +27,9 @@ export class VerificationController {
     return result;
   }
 
-  /** P4/S8: manual verdict correction (human-in-the-loop) — feeds the learning loop. */
+  /** P4/S8: manual verdict correction (human-in-the-loop) — feeds the learning loop. Manager-only. */
   @Post('verifications/correct')
+  @Roles('manager')
   async correct(
     @TenantId() tenantId: string,
     @Body() body: { objectId?: string; verifiedState?: string; reason?: string },
@@ -30,6 +43,7 @@ export class VerificationController {
   }
 
   @Post('verifications/sweep')
+  @Roles('manager')
   sweep(@TenantId() tenantId: string) {
     return this.verification.sweep(tenantId);
   }

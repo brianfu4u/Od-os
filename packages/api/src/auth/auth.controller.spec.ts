@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { AuthController } from './auth.controller';
 import type { SessionService } from './session.service';
 
@@ -9,8 +9,12 @@ import type { SessionService } from './session.service';
  * session bound to the SERVER-SIDE tenant (never a client-supplied one). This is the mechanism that
  * lets a phone terminal authenticate on staging (NODE_ENV=production) without re-opening the
  * wide-open dev-login in prod.
+ *
+ * feat/manager-auth: adds coverage for the real credential login (POST /auth/manager/login), which
+ * works in EVERY environment (incl. production) and mints a manager session via loginManager.
  */
 const STAGING_TENANT = '22222222-2222-2222-2222-222222222222';
+const REAL_TENANT = '11111111-1111-1111-1111-111111111111';
 
 function makeController() {
   const devLoginStaff = vi.fn(async ({ tenantId }: { tenantId: string }) => ({
@@ -21,8 +25,12 @@ function makeController() {
     token: 'mgr-tok',
     identity: { subject: 'manager' as const, tenantId, managerId: 'mgr-1' },
   }));
-  const sessions = { devLoginStaff, devLoginManager } as unknown as SessionService;
-  return { controller: new AuthController(sessions), devLoginStaff, devLoginManager };
+  const loginManager = vi.fn(async ({ login }: { login: string; password: string }) => ({
+    token: 'real-mgr-tok',
+    identity: { subject: 'manager' as const, tenantId: REAL_TENANT, managerId: `mgr-${login}`, role: 'manager' },
+  }));
+  const sessions = { devLoginStaff, devLoginManager, loginManager } as unknown as SessionService;
+  return { controller: new AuthController(sessions), devLoginStaff, devLoginManager, loginManager };
 }
 
 const res = { setHeader: vi.fn() };
@@ -87,5 +95,50 @@ describe('AuthController staging logins (env-gated shared password gate)', () =>
     await expect(controller.stagingManagerLogin({ password: 'let-me-in' }, res)).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+});
+
+describe('AuthController manager credential login (feat/manager-auth)', () => {
+  const savedEnv = process.env.NODE_ENV;
+  beforeEach(() => res.setHeader.mockClear());
+  afterEach(() => {
+    process.env.NODE_ENV = savedEnv;
+  });
+
+  it('mints a manager session via loginManager and sets the session cookie', async () => {
+    const { controller, loginManager } = makeController();
+    const out = await controller.managerLogin({ login: 'dana', password: 'a-strong-password' }, res);
+    expect(out.token).toBe('real-mgr-tok');
+    expect(out.identity).toMatchObject({ subject: 'manager', tenantId: REAL_TENANT, role: 'manager' });
+    expect(loginManager).toHaveBeenCalledWith({ login: 'dana', password: 'a-strong-password' });
+    expect(res.setHeader).toHaveBeenCalled();
+  });
+
+  it('trims the login and requires both fields (400 otherwise, without calling loginManager)', async () => {
+    const { controller, loginManager } = makeController();
+    await controller.managerLogin({ login: '  dana  ', password: 'pw123456789012' }, res);
+    expect(loginManager).toHaveBeenCalledWith({ login: 'dana', password: 'pw123456789012' });
+
+    loginManager.mockClear();
+    await expect(controller.managerLogin({ login: '', password: 'x' }, res)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(controller.managerLogin({ login: 'dana' }, res)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(controller.managerLogin({}, res)).rejects.toBeInstanceOf(BadRequestException);
+    expect(loginManager).not.toHaveBeenCalled();
+  });
+
+  it('is NOT NODE_ENV-gated — it authenticates in production (unlike dev-login)', async () => {
+    process.env.NODE_ENV = 'production';
+    const { controller, loginManager } = makeController();
+    const out = await controller.managerLogin({ login: 'dana', password: 'a-strong-password' }, res);
+    expect(out.token).toBe('real-mgr-tok');
+    expect(loginManager).toHaveBeenCalled();
+  });
+
+  it('manager/dev-login still 404s in production (the wide-open mock stays closed)', async () => {
+    process.env.NODE_ENV = 'production';
+    const { controller } = makeController();
+    await expect(
+      controller.devManagerLogin({ tenantId: REAL_TENANT, login: 'dana' }, res),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
