@@ -119,8 +119,8 @@ describe('managerAuthProblems — Gate 3 (feat/manager-auth)', () => {
 
   it('production + seed with an invalid tenant uuid → flagged', () => {
     expect(
-      managerAuthProblems(prod({ MANAGER_SEED_LOGIN: 'dana', MANAGER_SEED_PASSWORD: 'a-strong-seed-pw', MANAGER_SEED_TENANT_ID: 'nope' })),
-    )[0]!.match(/MANAGER_SEED_TENANT_ID/);
+      managerAuthProblems(prod({ MANAGER_SEED_LOGIN: 'dana', MANAGER_SEED_PASSWORD: 'a-strong-seed-pw', MANAGER_SEED_TENANT_ID: 'nope' }))[0],
+    ).toMatch(/MANAGER_SEED_TENANT_ID/);
   });
 
   it('production + short pepper → flagged; long pepper → OK', () => {

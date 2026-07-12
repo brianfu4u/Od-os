@@ -49,8 +49,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const body = isHttp
       ? (exception.getResponse() as unknown)
       : { statusCode: 500, error: 'Internal Server Error', requestId: req.requestId };
-    if (res.status && res.json) {
-      res.status(status).json(body);
+    const sendStatus = res.status?.bind(res);
+    const sendJson = res.json?.bind(res);
+    if (sendStatus && sendJson) {
+      sendStatus(status);
+      sendJson(body);
     } else if (res.setHeader) {
       res.statusCode = status;
       res.setHeader('Content-Type', 'application/json');
