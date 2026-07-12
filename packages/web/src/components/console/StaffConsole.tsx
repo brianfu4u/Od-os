@@ -140,6 +140,9 @@ export function StaffConsole() {
   const [fileName, setFileName] = useState<string>('');
   const [showScanner, setShowScanner] = useState(false);
   const [scanBusy, setScanBusy] = useState(false);
+  const [supportType, setSupportType] = useState<'supervisor' | 'staff' | 'equipment' | 'other'>('staff');
+  const [supportNote, setSupportNote] = useState('');
+  const [linkSupport, setLinkSupport] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const pushLog = useCallback((ok: boolean, msg: string) => {
@@ -253,6 +256,39 @@ export function StaffConsole() {
       await loadObjects();
     } catch (e) {
       pushLog(false, `${t('console.report')}: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // T6 · request support — a structured support_request report. Reuses the /reports pipeline, so it
+  // is tenant-scoped + append-only (report.received event), only ever a CLAIM (never verified), shows
+  // in the command-center comms, and LLM1 raises a manager cue. Optionally linked to the subject.
+  async function submitSupport(e: React.FormEvent): Promise<void> {
+    e.preventDefault();
+    if (!api) return;
+    const note = supportNote.trim();
+    if (!note) {
+      pushLog(false, t('support.needNote'));
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await api.postReport({
+        clientMessageId: newId(),
+        reportType: 'support_request',
+        text: `[${t(`support.types.${supportType}`)}] ${note}`,
+        fields: { supportType, note },
+        at: new Date().toISOString(),
+        scans:
+          linkSupport && subject
+            ? [{ scannedObjectType: subject.type, scannedObjectId: subject.id, at: new Date().toISOString() }]
+            : undefined,
+      });
+      pushLog(true, `${t('support.title')} → ${res.deduped ? t('console.deduped') : t('console.created')} (${res.communicationId.slice(0, 8)})`);
+      setSupportNote('');
+    } catch (e) {
+      pushLog(false, `${t('support.title')}: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setBusy(false);
     }
@@ -482,6 +518,28 @@ export function StaffConsole() {
             </label>
             <button type="submit" disabled={busy} className={BTN_PRIMARY}>
               {t('console.sendReport')}
+            </button>
+          </div>
+        </form>
+
+        {/* T6 · request support — a structured support_request report (visible in the command center) */}
+        <form className={CARD} onSubmit={(e) => void submitSupport(e)}>
+          <h2 className="text-sm font-semibold">{t('support.title')}</h2>
+          <p className="mt-1 text-xs text-slate-500">{t('support.hint')}</p>
+          <div className="mt-3 space-y-3">
+            <select className={INPUT} value={supportType} onChange={(e) => setSupportType(e.target.value as typeof supportType)}>
+              <option value="supervisor">{t('support.types.supervisor')}</option>
+              <option value="staff">{t('support.types.staff')}</option>
+              <option value="equipment">{t('support.types.equipment')}</option>
+              <option value="other">{t('support.types.other')}</option>
+            </select>
+            <input className={INPUT} value={supportNote} onChange={(e) => setSupportNote(e.target.value)} placeholder={t('support.notePlaceholder')} />
+            <label className="flex items-center gap-2 py-1 text-sm text-slate-300">
+              <input type="checkbox" className="h-5 w-5" checked={linkSupport} onChange={(e) => setLinkSupport(e.target.checked)} />
+              {t('support.link')}
+            </label>
+            <button type="submit" disabled={busy} className={BTN_PRIMARY}>
+              {t('support.submit')}
             </button>
           </div>
         </form>

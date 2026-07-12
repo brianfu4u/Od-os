@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import type { CommSummary } from '@clearview/shared';
 import { hhmm, initials } from '../../lib/format';
 
-const KNOWN_REPORT_TYPES = ['clock_in', 'clock_out', 'task_update', 'event', 'evidence', 'scan'];
+const KNOWN_REPORT_TYPES = ['clock_in', 'clock_out', 'task_update', 'event', 'evidence', 'scan', 'support_request'];
 
 /** Maps a report type to the LLM "listening" annotation shown under each message. */
 function annotationKey(reportType?: string): string {
@@ -15,6 +15,8 @@ function annotationKey(reportType?: string): string {
       return 'comms.annEvidence';
     case 'task_update':
       return 'comms.annTask';
+    case 'support_request':
+      return 'comms.annSupport';
     case 'clock_in':
     case 'clock_out':
       return 'comms.annClock';
@@ -50,7 +52,12 @@ export function CommsPanel({ comms }: { comms: CommSummary[] }) {
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-medium text-slate-200">{c.author}</span>
                   {c.reportType ? (
-                    <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-slate-400">
+                    <span
+                      className={[
+                        'rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wide',
+                        c.reportType === 'support_request' ? 'bg-rose-500/20 text-rose-300' : 'bg-slate-800 text-slate-400',
+                      ].join(' ')}
+                    >
                       {KNOWN_REPORT_TYPES.includes(c.reportType)
                         ? t(`comms.reportTypes.${c.reportType}`)
                         : c.reportType}
