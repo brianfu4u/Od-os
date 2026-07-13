@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { EvidenceItem, EvidenceType, TriggerReason, VerificationResult } from '@clearview/shared';
 import { withTenant } from '../database/tenant-context';
-import { getSopConfig } from './sop-config';
+import { getSopConfig, MAX_STAFF_RESUBMITS } from './sop-config';
 import { insertLearningFeedback, readLearnedTaskParams } from '../learning/learning.sql';
 import type { Scorer, ScoreInput } from './scorer';
 
@@ -201,40 +201,85 @@ export class VerificationRepository {
         );
       }
 
-      // ── Resubmission (回退重提), closed-loop step 6 ──────────────────────────────────────────
+      // ── Resubmission (回退重提), closed-loop step 6 — CAPPED ────────────────────────────────
       // When the DETERMINISTIC engine returns a non-verified verdict for a Task that the staff
       // CLAIMED done, and the shortfall is actionable by the staff (a required evidence kind is
-      // missing, or the evidence conflicts), record an append-only `task.resubmission.requested`
-      // event. This is the signal the staff console reads to know "add the missing evidence and
-      // resubmit". It is pure audit trail: it does NOT touch verified_state (S2 owns that), creates
-      // no world state, and re-uses the existing events table (no migration). The staff attaching
-      // fresh evidence already re-triggers verifyObject() (reports.service), so a satisfied resubmit
-      // simply stops emitting this event → the loop closes.
-      const needsResubmission =
+      // missing, or the evidence conflicts), the loop bounces it BACK — but only up to
+      // MAX_STAFF_RESUBMITS times. All of this is pure append-only audit trail: it NEVER touches
+      // verified_state (S2 owns that), creates no world state, and re-uses the existing events
+      // table (no migration). The staff attaching fresh evidence already re-triggers verifyObject()
+      // (reports.service), so a satisfied resubmit simply stops emitting → the loop closes.
+      //
+      //   • attempt ≤ MAX_STAFF_RESUBMITS → emit `task.resubmission.requested` (staff nudge, as before).
+      //   • attempt >  MAX_STAFF_RESUBMITS → STOP nagging the staff; emit a one-time
+      //     `task.resubmission.escalated` marker instead. The ball is now in the MANAGER's court:
+      //     the escalation agent turns this marker into an evidence-backed manager cue (carrying
+      //     BOTH attempt reasons + the missing kinds + the count) through the normal S3 pipeline.
+      const shortfallActionable =
         obj.type === 'Task' &&
         claimPresent &&
         result.verifiedState !== 'verified' &&
         (requiredMissing.length > 0 || triggered.includes('conflict'));
-      if (needsResubmission) {
-        const attemptRes = await c.query<{ n: string }>(
+      if (shortfallActionable) {
+        // Count the staff-facing bounce-backs already recorded (NOT the escalation marker).
+        const priorRes = await c.query<{ n: string }>(
           `SELECT count(*) AS n FROM events WHERE object_id = $1 AND event_type = 'task.resubmission.requested'`,
           [objectId],
         );
-        const attempt = Number(attemptRes.rows[0]?.n ?? 0) + 1;
-        await c.query(
-          `INSERT INTO events (tenant_id, object_id, event_type, payload, actor)
-           VALUES ($1, $2, 'task.resubmission.requested', $3::jsonb, 'verification')`,
-          [
-            tenantId,
-            objectId,
-            JSON.stringify({
-              verifiedState: result.verifiedState,
-              requiredMissing,
-              reason: result.reason,
-              attempt,
-            }),
-          ],
-        );
+        const priorRequests = Number(priorRes.rows[0]?.n ?? 0);
+        const attempt = priorRequests + 1;
+
+        if (attempt <= MAX_STAFF_RESUBMITS) {
+          // Staff bounce-back (as before): ask the assignee to add evidence and resubmit.
+          await c.query(
+            `INSERT INTO events (tenant_id, object_id, event_type, payload, actor)
+             VALUES ($1, $2, 'task.resubmission.requested', $3::jsonb, 'verification')`,
+            [
+              tenantId,
+              objectId,
+              JSON.stringify({
+                verifiedState: result.verifiedState,
+                requiredMissing,
+                reason: result.reason,
+                attempt,
+              }),
+            ],
+          );
+        } else {
+          // Cap reached: escalate to the manager instead of nagging the staff again. Emit the
+          // marker ONCE (idempotent) so repeated failing verifies don't spam escalation events.
+          const escRes = await c.query<{ n: string }>(
+            `SELECT count(*) AS n FROM events WHERE object_id = $1 AND event_type = 'task.resubmission.escalated'`,
+            [objectId],
+          );
+          if (Number(escRes.rows[0]?.n ?? 0) === 0) {
+            // Preserve the FIRST-attempt reason (from the attempt-1 request payload) alongside the
+            // reason that finally tipped it into escalation, so the manager sees the full history.
+            const firstReq = await c.query<{ payload: { reason?: string; requiredMissing?: unknown } }>(
+              `SELECT payload FROM events WHERE object_id = $1 AND event_type = 'task.resubmission.requested'
+                ORDER BY created_at ASC LIMIT 1`,
+              [objectId],
+            );
+            const firstReason =
+              typeof firstReq.rows[0]?.payload?.reason === 'string' ? (firstReq.rows[0]!.payload.reason as string) : null;
+            await c.query(
+              `INSERT INTO events (tenant_id, object_id, event_type, payload, actor)
+               VALUES ($1, $2, 'task.resubmission.escalated', $3::jsonb, 'verification')`,
+              [
+                tenantId,
+                objectId,
+                JSON.stringify({
+                  verifiedState: result.verifiedState,
+                  requiredMissing,
+                  firstReason,
+                  latestReason: result.reason,
+                  resubmissionCount: priorRequests,
+                  attempt,
+                }),
+              ],
+            );
+          }
+        }
       }
 
       return { objectId, objectType: obj.type, result, alertId };

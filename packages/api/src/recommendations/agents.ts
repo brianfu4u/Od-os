@@ -14,6 +14,17 @@ export interface AgentContext {
   alert?: { id: string; triggered: string[]; severity: string; reason: string } | null;
   /** Optional cross-object signals the sweep can populate (undefined on the per-object event path). */
   related?: { usageScan?: boolean };
+  /**
+   * Resubmission escalation signal (closed-loop step 6). Present when a CLAIMED task has exhausted
+   * its staff bounce-backs (MAX_STAFF_RESUBMITS) and verify() recorded a `task.resubmission.escalated`
+   * marker. Carries the full history the manager needs. Undefined when the task never escalated.
+   */
+  resubmissionEscalation?: {
+    firstReason: string | null;
+    latestReason: string | null;
+    requiredMissing: string[];
+    resubmissionCount: number;
+  };
   now: number;
 }
 
@@ -291,6 +302,49 @@ export class EquipmentAgent implements DomainAgent {
   }
 }
 
+/**
+ * Resubmission escalation (回退重提 — closed-loop step 6, terminal path). Fires ONLY when verify()
+ * has recorded a `task.resubmission.escalated` marker: the staff already got their allowed
+ * bounce-back(s) (MAX_STAFF_RESUBMITS) and the resubmission STILL failed. The ball is now in the
+ * manager's court, so this turns the marker into an evidence-backed manager cue carrying the FULL
+ * history — both attempt reasons, the still-missing evidence kinds, and the resubmission count — so
+ * the manager can decide via the EXISTING approve/dismiss flow. Deterministic: it only reads the
+ * escalation signal the repository gathered; it proposes, it never writes a verdict.
+ */
+export class ResubmissionEscalationAgent implements DomainAgent {
+  readonly domain: DomainName = 'staff';
+  propose(ctx: AgentContext): RecommendationCandidate[] {
+    const esc = ctx.resubmissionEscalation;
+    // Only escalate a still-unresolved task: once it verifies, the loop has closed and no cue is due.
+    if (!esc || ctx.object.type !== 'Task' || ctx.object.verifiedState === 'verified') return [];
+    const missing = esc.requiredMissing.length ? esc.requiredMissing.join(', ') : 'evidence';
+    return [
+      {
+        domain: this.domain,
+        sourceAgent: this.domain,
+        title: `${label(ctx)}: resubmission failed — manager review required`,
+        why: `Staff resubmitted but the task still cannot be auto-verified (missing: ${missing}). Manager decision required.`,
+        evidence: [
+          { kind: 'resubmission', ref: ctx.object.id, note: `resubmitted ${esc.resubmissionCount}×, still ${ctx.object.verifiedState ?? 'unverified'}` },
+          { kind: 'first_attempt', ref: ctx.object.id, note: esc.firstReason ?? 'n/a' },
+          { kind: 'latest_attempt', ref: ctx.object.id, note: esc.latestReason ?? 'n/a' },
+          { kind: 'required_missing', ref: ctx.object.id, note: missing },
+        ],
+        confidence: ctx.object.confidence ?? 0.5,
+        proposedActions: [
+          { label: 'Review & decide (accept / reassign / correct)', actionType: 'review_resubmission', riskTier: 'high', needsApproval: true },
+        ],
+        objectId: ctx.object.id,
+        severity: 'high',
+        impact: 2,
+        // Share the task's resource key so this manager cue de-conflicts with other cues on the
+        // same task rather than double-showing.
+        resourceKey: `task:${ctx.object.id}`,
+      },
+    ];
+  }
+}
+
 export const DEFAULT_AGENTS: DomainAgent[] = [
   new PatientFlowAgent(),
   new StaffAgent(),
@@ -298,4 +352,5 @@ export const DEFAULT_AGENTS: DomainAgent[] = [
   new FinancialAgent(),
   new MarketingAgent(),
   new EquipmentAgent(),
+  new ResubmissionEscalationAgent(),
 ];

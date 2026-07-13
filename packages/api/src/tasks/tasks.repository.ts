@@ -23,6 +23,8 @@ interface TaskRow {
   resubmission_count: string | null;
   /** payload of the MOST RECENT resubmission request (jsonb), or null. */
   last_resubmission: { verifiedState?: string; requiredMissing?: unknown; reason?: string; attempt?: number } | null;
+  /** count of `task.resubmission.escalated` markers (>0 ⇒ the loop escalated to a manager). */
+  escalated_count: string | null;
 }
 
 function str(v: unknown): string | null {
@@ -49,26 +51,36 @@ function mapTask(r: TaskRow): MyTaskSummary {
 
 /**
  * Derive the READ-ONLY resubmission projection from the task row's resubmission-event columns.
- * `needsResubmission` is true only when the LATEST request still stands: the task carries at least
- * one request AND its current verdict is still non-verified (a subsequent verified verdict closes the
- * loop and flips this back to false without deleting the audit trail).
+ *
+ * Two terminal, MUTUALLY EXCLUSIVE staff-facing states while a task is still non-verified:
+ *   • `escalatedToManager` — the task exhausted its staff bounce-backs (a `.escalated` marker
+ *     exists). The staff has NO further action; the manager now owns it. Takes precedence.
+ *   • `needsResubmission` — within the cap: the task was bounced back and the verdict is still
+ *     non-verified, so the staff should add evidence and resubmit.
+ * A subsequent verified verdict closes the loop and clears BOTH flags without deleting the
+ * append-only audit trail (the counts survive).
  */
 function resubmissionFields(r: TaskRow): Pick<
   MyTaskSummary,
-  'needsResubmission' | 'requiredMissing' | 'resubmissionCount' | 'lastResubmissionReason'
+  'needsResubmission' | 'requiredMissing' | 'resubmissionCount' | 'lastResubmissionReason' | 'escalatedToManager'
 > {
   const count = Number(r.resubmission_count ?? 0);
+  const escalatedCount = Number(r.escalated_count ?? 0);
   const last = r.last_resubmission ?? null;
+  const stillUnverified = r.verified_state !== 'verified';
+  const escalatedToManager = escalatedCount > 0 && stillUnverified;
+  // Once escalated, stop asking the staff to resubmit (the ball is in the manager's court).
+  const needsResubmission = !escalatedToManager && count > 0 && stillUnverified;
   const requiredMissing =
     last && Array.isArray(last.requiredMissing)
       ? last.requiredMissing.filter((k): k is string => typeof k === 'string')
       : [];
-  const needsResubmission = count > 0 && r.verified_state !== 'verified';
   return {
     needsResubmission,
     requiredMissing: needsResubmission ? requiredMissing : [],
     resubmissionCount: count,
     lastResubmissionReason: last && typeof last.reason === 'string' ? last.reason : null,
+    escalatedToManager,
   };
 }
 
@@ -88,7 +100,8 @@ export class TasksRepository {
         `SELECT t.id, t.properties, t.expected_state, t.claimed_state, t.verified_state, t.confidence, t.updated_at,
                 room.label AS room_label,
                 resub.n AS resubmission_count,
-                resub.last_payload AS last_resubmission
+                resub.last_payload AS last_resubmission,
+                esc.n AS escalated_count
            FROM objects t
            JOIN links la ON la.to_object = t.id AND la.relation = 'assignedTo' AND la.from_object = $1
            LEFT JOIN LATERAL (
@@ -109,6 +122,11 @@ export class TasksRepository {
                FROM events e
               WHERE e.object_id = t.id AND e.event_type = 'task.resubmission.requested'
            ) resub ON true
+           LEFT JOIN LATERAL (
+             SELECT count(*) AS n
+               FROM events e3
+              WHERE e3.object_id = t.id AND e3.event_type = 'task.resubmission.escalated'
+           ) esc ON true
           WHERE t.type = 'Task'
             AND (t.properties->>'archived') IS DISTINCT FROM 'true'
           ORDER BY t.updated_at DESC

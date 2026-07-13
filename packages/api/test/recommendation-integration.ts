@@ -79,9 +79,15 @@ async function main(): Promise<void> {
     check((await count(admin, `SELECT count(*)::int AS n FROM links WHERE from_object=$1 AND to_object=$2 AND relation='references'`, [recId, taskId])) === 1, 'Recommendation --references--> task');
     check((await count(admin, `SELECT count(*)::int AS n FROM events WHERE object_id=$1 AND event_type='recommendation.created'`, [recId])) === 1, 'recommendation.created event emitted');
 
-    // Idempotent: re-verify does not duplicate the open cue.
+    // Idempotent: re-verify does not duplicate THIS (patient-flow conflict) cue. Note a second
+    // failing verify legitimately trips the capped-resubmission escalation, which adds a SEPARATE
+    // staff-domain manager cue on the same task — so we scope the idempotency check to the
+    // patient-flow cue rather than counting every cue on the objectId.
     await verification.verifyObject(A, taskId);
-    check((await recommendations.feed(A, 'open', 20)).filter((r) => r.objectId === taskId).length === 1, 're-verify does not duplicate the cue');
+    check(
+      (await recommendations.feed(A, 'open', 20)).filter((r) => r.objectId === taskId && r.domain === 'patient_flow').length === 1,
+      're-verify does not duplicate the cue',
+    );
 
     // Human-in-the-loop: approve records intent (no world write) and moves it out of the open feed.
     const approved = await recommendations.act(A, recId, 'approved');

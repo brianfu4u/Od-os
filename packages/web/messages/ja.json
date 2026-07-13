@@ -357,7 +357,16 @@
     "pick": "対象にして報告",
     "picked": "対象に設定",
     "loadFailed": "マイタスクの読み込みに失敗",
-    "claimed": "申告"
+    "claimed": "申告",
+    "resubmit": {
+      "title": "差し戻し — 証拠を追加して再提出",
+      "missing": "不足",
+      "action": "証拠を追加して再提出"
+    },
+    "escalated": {
+      "title": "エスカレーション — マネージャー確認待ち",
+      "body": "このタスクは再提出されましたが自動検証できませんでした。マネージャーが確認します。追加の対応は不要です。"
+    }
   },
   "ops": {
     "title": "運用",
@@ -412,5 +421,13 @@
       "equipment": "設備",
       "other": "その他"
     }
+  },
+  "evidence": {
+    "snapshot": "写真",
+    "document": "書類",
+    "qr_scan": "QRスキャン",
+    "communication": "メッセージ",
+    "cross_object": "関連レコード",
+    "timing": "タイミング"
   }
 }
