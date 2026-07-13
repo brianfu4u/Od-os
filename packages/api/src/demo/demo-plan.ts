@@ -172,7 +172,14 @@ export function buildDemoPlan(): DemoPlan {
       expectedState: SOP_EXPECTED.equipment_calibration!,
       claim: SOP_EXPECTED.equipment_calibration!,
       requiredEvidence: SOP_REQUIRED.equipment_calibration!,
-      attach: [{ kind: 'document', seedKey: 'demo:ev:doc-cal-oct1', caption: 'OCT #1 校准证书' }],
+      // The required document (strength 0.55) alone lands the claim at 0.50 + (1−0.50)·0.55 = 0.775 < 0.85 →
+      // pending, NOT verified. A calibration is proven by BOTH the signed cert (document) AND a photo of the
+      // calibrated instrument (snapshot): 0.775 + (1−0.775)·(0.71·0.85) = 0.911 ≥ 0.85 → verified. The snapshot
+      // is corroborating (not a NEW required kind), so requiredSatisfied still only depends on the document.
+      attach: [
+        { kind: 'document', seedKey: 'demo:ev:doc-cal-oct1', caption: 'OCT #1 校准证书' },
+        { kind: 'snapshot', seedKey: 'demo:ev:snap-cal-oct1', caption: 'OCT #1 校准后读数照片' },
+      ],
       assignToStaffKey: 'demo:staff:tech',
       targetVerdict: 'verified',
     },
