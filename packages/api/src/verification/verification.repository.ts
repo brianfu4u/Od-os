@@ -201,6 +201,42 @@ export class VerificationRepository {
         );
       }
 
+      // ── Resubmission (回退重提), closed-loop step 6 ──────────────────────────────────────────
+      // When the DETERMINISTIC engine returns a non-verified verdict for a Task that the staff
+      // CLAIMED done, and the shortfall is actionable by the staff (a required evidence kind is
+      // missing, or the evidence conflicts), record an append-only `task.resubmission.requested`
+      // event. This is the signal the staff console reads to know "add the missing evidence and
+      // resubmit". It is pure audit trail: it does NOT touch verified_state (S2 owns that), creates
+      // no world state, and re-uses the existing events table (no migration). The staff attaching
+      // fresh evidence already re-triggers verifyObject() (reports.service), so a satisfied resubmit
+      // simply stops emitting this event → the loop closes.
+      const needsResubmission =
+        obj.type === 'Task' &&
+        claimPresent &&
+        result.verifiedState !== 'verified' &&
+        (requiredMissing.length > 0 || triggered.includes('conflict'));
+      if (needsResubmission) {
+        const attemptRes = await c.query<{ n: string }>(
+          `SELECT count(*) AS n FROM events WHERE object_id = $1 AND event_type = 'task.resubmission.requested'`,
+          [objectId],
+        );
+        const attempt = Number(attemptRes.rows[0]?.n ?? 0) + 1;
+        await c.query(
+          `INSERT INTO events (tenant_id, object_id, event_type, payload, actor)
+           VALUES ($1, $2, 'task.resubmission.requested', $3::jsonb, 'verification')`,
+          [
+            tenantId,
+            objectId,
+            JSON.stringify({
+              verifiedState: result.verifiedState,
+              requiredMissing,
+              reason: result.reason,
+              attempt,
+            }),
+          ],
+        );
+      }
+
       return { objectId, objectType: obj.type, result, alertId };
     });
   }
