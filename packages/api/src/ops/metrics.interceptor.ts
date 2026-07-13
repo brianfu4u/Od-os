@@ -20,7 +20,18 @@ interface ReqLike {
 }
 interface ResLike {
   statusCode?: number;
+  headersSent?: boolean;
+  getHeader?(name: string): unknown;
   setHeader?(name: string, value: string): void;
+}
+
+/** True once the response has started streaming (SSE) or headers are already flushed — any header
+ * write after this throws "Cannot set headers after they are sent". SSE endpoints (@Sse) flush a
+ * `text/event-stream` head immediately, so we must never touch headers or run per-emit finish on them. */
+function isStreamingResponse(res: ResLike): boolean {
+  if (res.headersSent === true) return true;
+  const ct = res.getHeader?.('content-type');
+  return typeof ct === 'string' && ct.includes('text/event-stream');
 }
 
 /**
@@ -42,7 +53,9 @@ export class MetricsInterceptor implements NestInterceptor {
     const start = Date.now();
     const requestId = req.requestId ?? randomUUID();
     req.requestId = requestId;
-    res.setHeader?.('X-Request-Id', requestId);
+    // Never set a header on a response whose head is already sent (SSE stream) — that throws
+    // "Cannot set headers after they are sent", which @Sse surfaces to the client as an error event.
+    if (!isStreamingResponse(res)) res.setHeader?.('X-Request-Id', requestId);
 
     const method = (req.method ?? 'GET').toUpperCase();
     const rawPath = req.originalUrl ?? req.url ?? '/';
@@ -57,12 +70,27 @@ export class MetricsInterceptor implements NestInterceptor {
       this.logger.log(JSON.stringify(httpLogRecord({ method, route, status, ms, requestId, tenantId })));
     };
 
+    // SSE streams emit many events over one open response. Counting/logging per emit would flood the
+    // access log and re-run finish() against an open stream; record once when the stream terminates.
+    let done = false;
+    const finishOnce = (status: number): void => {
+      if (done) return;
+      done = true;
+      finish(status);
+    };
+
     return next.handle().pipe(
       tap({
-        next: () => finish(typeof res.statusCode === 'number' ? res.statusCode : 200),
+        next: () => {
+          if (isStreamingResponse(res)) return; // SSE: defer to complete/error, don't finish per event
+          finish(typeof res.statusCode === 'number' ? res.statusCode : 200);
+        },
         error: (err: unknown) => {
           const status = (err as { status?: unknown })?.status;
-          finish(typeof status === 'number' ? status : 500);
+          finishOnce(typeof status === 'number' ? status : 500);
+        },
+        complete: () => {
+          if (isStreamingResponse(res)) finishOnce(typeof res.statusCode === 'number' ? res.statusCode : 200);
         },
       }),
     );

@@ -9,6 +9,16 @@ import { syntheticFeedItems } from '../lib/synthetic-transcripts';
 
 export type FeedStatus = 'connecting' | 'live' | 'offline';
 
+/**
+ * Two independent signals drive the UI:
+ *  - `status` (data availability) — drives the offline BANNER. It only becomes 'offline' when a real
+ *    data fetch (`load()`) fails, and returns to 'live' as soon as one succeeds. A flaky SSE socket
+ *    never flips this, so the banner no longer flickers when the realtime stream reconnects.
+ *  - `streaming` (realtime link) — a soft indicator for the live/reconnecting pill; SSE drops just
+ *    downgrade this, they don't raise the banner.
+ */
+export type StreamState = 'connecting' | 'open' | 'reconnecting';
+
 export interface LiveData {
   overview: OverviewResult | null;
   recommendations: RecommendationRecord[];
@@ -17,6 +27,8 @@ export interface LiveData {
   /** P7/T4: voice transcripts (voice → transcript → claim → verdict), newest first. */
   transcripts: TranscriptFeedItem[];
   status: FeedStatus;
+  /** Realtime SSE link state — soft indicator, does not gate the offline banner. */
+  streaming: StreamState;
   lastEventAt: number | null;
   error: string | null;
   refresh: () => void;
@@ -45,9 +57,13 @@ export function useLiveData(token: string): LiveData {
   const [results, setResults] = useState<RecommendationRecord[]>([]);
   const [transcripts, setTranscripts] = useState<TranscriptFeedItem[]>([]);
   const [status, setStatus] = useState<FeedStatus>('connecting');
+  const [streaming, setStreaming] = useState<StreamState>('connecting');
   const [error, setError] = useState<string | null>(null);
   const [lastEventAt, setLastEventAt] = useState<number | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Whether at least one data load has ever succeeded. Until then we stay in 'connecting' (no scary
+  // banner on first paint); after the first success, a later failure shows the banner.
+  const everLoaded = useRef(false);
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -65,11 +81,14 @@ export function useLiveData(token: string): LiveData {
             syntheticItems: STT_SYNTHETIC ? syntheticFeedItems() : undefined,
           }),
         );
+        everLoaded.current = true;
         setError(null);
-        setStatus((s) => (s === 'offline' ? 'live' : s));
+        setStatus('live'); // a successful data load is the single source of truth for "online"
       } catch (e) {
         if ((e as { name?: string }).name === 'AbortError') return;
         setError(e instanceof Error ? e.message : String(e));
+        // Only surface the offline banner once a fetch has genuinely failed. (SSE hiccups never reach
+        // here — they only touch `streaming` below — so the banner stays stable.)
         setStatus('offline');
       }
     },
@@ -95,8 +114,8 @@ export function useLiveData(token: string): LiveData {
       es = new EventSource(api.streamUrl());
       es.onopen = () => {
         attempt = 0;
-        setStatus('live');
-        void load();
+        setStreaming('open');
+        void load(); // reconcile any gap while the socket was down
       };
       es.onmessage = () => {
         setLastEventAt(Date.now());
@@ -104,7 +123,10 @@ export function useLiveData(token: string): LiveData {
         timer.current = setTimeout(() => void load(), 250);
       };
       es.onerror = () => {
-        setStatus('offline');
+        // A dropped SSE socket downgrades the realtime pill and triggers a backoff reconnect, but it
+        // does NOT flip the offline banner — data availability is decided by load() alone. This is
+        // what stops the banner from flickering on every reconnect attempt.
+        setStreaming('reconnecting');
         es?.close();
         if (closed) return;
         attempt += 1;
@@ -172,6 +194,7 @@ export function useLiveData(token: string): LiveData {
     results,
     transcripts,
     status,
+    streaming,
     lastEventAt,
     error,
     refresh,

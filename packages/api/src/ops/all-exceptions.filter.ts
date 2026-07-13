@@ -12,6 +12,7 @@ interface ReqLike {
 }
 interface ResLike {
   statusCode?: number;
+  headersSent?: boolean;
   status?(code: number): ResLike;
   json?(body: unknown): void;
   setHeader?(name: string, value: string): void;
@@ -44,6 +45,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const record = errorLogRecord(sample);
     if (status >= 500) this.logger.error(JSON.stringify(record));
     else this.logger.warn(JSON.stringify(record));
+
+    // If the response head is already sent (e.g. an @Sse stream that errored mid-flight), writing a
+    // status/headers/body now throws "Cannot set headers after they are sent". We've already recorded
+    // the error above; just stop here so the stream closes cleanly instead of emitting a header error.
+    if (res.headersSent === true) return;
 
     // Client response: preserve HttpException's shape; generic body for unexpected errors.
     const body = isHttp

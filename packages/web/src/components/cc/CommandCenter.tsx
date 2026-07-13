@@ -32,8 +32,9 @@ function useClock(): string {
 export function CommandCenter() {
   const t = useTranslations();
   const { session } = useSession();
-  const { overview, recommendations, results, transcripts, status, error, refresh, approve, undo, dismiss, snooze, retryTranscription } =
+  const { overview, recommendations, results, transcripts, status, streaming, error, refresh, approve, undo, dismiss, snooze, retryTranscription } =
     useLiveData(session?.token ?? '');
+  void streaming; // realtime link state is surfaced via the Podium status pill
   const clock = useClock();
 
   const tiles = useMemo(() => buildDomainTiles(overview, recommendations), [overview, recommendations]);
@@ -55,7 +56,15 @@ export function CommandCenter() {
       <div className="mx-auto max-w-[1400px] space-y-5 px-[4%] py-6">
         <Podium score={score} kpis={kpis} status={status} clock={clock} />
 
-        {status === 'offline' ? (
+        {/* Offline banner. The container is ALWAYS mounted and only toggles visibility/height, so a
+            transient status change can no longer mount/unmount it and make the layout jump (flicker).
+            `status` is now driven solely by a real data-fetch failure, not by SSE reconnects. */}
+        <div
+          aria-hidden={status !== 'offline'}
+          className={`overflow-hidden transition-all duration-300 ${
+            status === 'offline' ? 'max-h-40 opacity-100' : 'pointer-events-none max-h-0 opacity-0'
+          }`}
+        >
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
             <span>
               {t('cc.offline', { base: API_BASE })}
@@ -69,7 +78,7 @@ export function CommandCenter() {
               {t('cc.retry')}
             </button>
           </div>
-        ) : null}
+        </div>
 
         <LoopStrip />
 
