@@ -118,4 +118,18 @@ export interface MyTaskSummary {
   confidence: number | null;
   dueBy: string | null;
   updatedAt: string;
+  /**
+   * Resubmission (回退重提) — all four are READ-ONLY projections derived from the append-only
+   * `task.resubmission.requested` events + verification ledger. They describe "the deterministic S2
+   * engine returned a non-verified verdict that requires the staff to add evidence and resubmit".
+   * The engine (S2) still owns verifiedState; these fields never feed back into the verdict.
+   */
+  /** True when the latest verify was non-verified AND asked the staff to add evidence & resubmit. */
+  needsResubmission: boolean;
+  /** Evidence kinds still missing on the most recent resubmission request (empty when none). */
+  requiredMissing: string[];
+  /** How many times this task has been sent back for resubmission (append-only event count). */
+  resubmissionCount: number;
+  /** Human-readable reason from the most recent resubmission request (null when none). */
+  lastResubmissionReason: string | null;
 }

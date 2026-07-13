@@ -19,6 +19,10 @@ interface TaskRow {
   confidence: string | null;
   updated_at: string;
   room_label: string | null;
+  /** count of append-only `task.resubmission.requested` events for this task. */
+  resubmission_count: string | null;
+  /** payload of the MOST RECENT resubmission request (jsonb), or null. */
+  last_resubmission: { verifiedState?: string; requiredMissing?: unknown; reason?: string; attempt?: number } | null;
 }
 
 function str(v: unknown): string | null {
@@ -39,6 +43,32 @@ function mapTask(r: TaskRow): MyTaskSummary {
     confidence: r.confidence === null ? null : Number(r.confidence),
     dueBy: str(p.dueBy),
     updatedAt: new Date(r.updated_at).toISOString(),
+    ...resubmissionFields(r),
+  };
+}
+
+/**
+ * Derive the READ-ONLY resubmission projection from the task row's resubmission-event columns.
+ * `needsResubmission` is true only when the LATEST request still stands: the task carries at least
+ * one request AND its current verdict is still non-verified (a subsequent verified verdict closes the
+ * loop and flips this back to false without deleting the audit trail).
+ */
+function resubmissionFields(r: TaskRow): Pick<
+  MyTaskSummary,
+  'needsResubmission' | 'requiredMissing' | 'resubmissionCount' | 'lastResubmissionReason'
+> {
+  const count = Number(r.resubmission_count ?? 0);
+  const last = r.last_resubmission ?? null;
+  const requiredMissing =
+    last && Array.isArray(last.requiredMissing)
+      ? last.requiredMissing.filter((k): k is string => typeof k === 'string')
+      : [];
+  const needsResubmission = count > 0 && r.verified_state !== 'verified';
+  return {
+    needsResubmission,
+    requiredMissing: needsResubmission ? requiredMissing : [],
+    resubmissionCount: count,
+    lastResubmissionReason: last && typeof last.reason === 'string' ? last.reason : null,
   };
 }
 
@@ -56,7 +86,9 @@ export class TasksRepository {
       if (!staffId) return [];
       const res = await c.query<TaskRow>(
         `SELECT t.id, t.properties, t.expected_state, t.claimed_state, t.verified_state, t.confidence, t.updated_at,
-                room.label AS room_label
+                room.label AS room_label,
+                resub.n AS resubmission_count,
+                resub.last_payload AS last_resubmission
            FROM objects t
            JOIN links la ON la.to_object = t.id AND la.relation = 'assignedTo' AND la.from_object = $1
            LEFT JOIN LATERAL (
@@ -67,6 +99,16 @@ export class TasksRepository {
               ORDER BY r.created_at ASC
               LIMIT 1
            ) room ON true
+           LEFT JOIN LATERAL (
+             SELECT count(*) AS n,
+                    (SELECT e2.payload
+                       FROM events e2
+                      WHERE e2.object_id = t.id AND e2.event_type = 'task.resubmission.requested'
+                      ORDER BY e2.created_at DESC
+                      LIMIT 1) AS last_payload
+               FROM events e
+              WHERE e.object_id = t.id AND e.event_type = 'task.resubmission.requested'
+           ) resub ON true
           WHERE t.type = 'Task'
             AND (t.properties->>'archived') IS DISTINCT FROM 'true'
           ORDER BY t.updated_at DESC
