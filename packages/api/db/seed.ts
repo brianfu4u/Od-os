@@ -27,14 +27,21 @@ async function insObject(
 ): Promise<string> {
   const { properties = {}, expected = null, claimed = null, verified = null, confidence = null } =
     opts;
+  // A Task IS a flow: mint an initial `pending` flow whose id equals the Task's own object id
+  // (each task is its own flow). The manager decision endpoint is the only thing that closes it.
+  const isTask = type === 'Task';
   const res = await client.query<{ id: string }>(
     `INSERT INTO objects
-       (tenant_id, type, properties, expected_state, claimed_state, verified_state, confidence)
-     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7)
+       (tenant_id, type, properties, expected_state, claimed_state, verified_state, confidence, flow_state)
+     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8)
      RETURNING id`,
-    [tenantId, type, JSON.stringify(properties), expected, claimed, verified, confidence],
+    [tenantId, type, JSON.stringify(properties), expected, claimed, verified, confidence, isTask ? 'pending' : null],
   );
-  return res.rows[0]!.id;
+  const id = res.rows[0]!.id;
+  if (isTask) {
+    await client.query(`UPDATE objects SET flow_id = id WHERE id = $1`, [id]);
+  }
+  return id;
 }
 
 async function link(

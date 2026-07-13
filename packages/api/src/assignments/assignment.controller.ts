@@ -1,12 +1,25 @@
-import { BadRequestException, Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
-import type { AssignmentOverview, AssignmentResult, AssignTaskInput, CreateTaskInput } from '@clearview/shared';
+import { BadRequestException, Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import type {
+  AssignmentOverview,
+  AssignmentResult,
+  AssignTaskInput,
+  CreateTaskInput,
+  TaskDecisionInput,
+  TaskDecisionResult,
+} from '@clearview/shared';
 import { TenantGuard } from '../tenant/tenant.guard';
 import { RolesGuard } from '../tenant/roles.guard';
 import { Roles } from '../tenant/roles.decorator';
 import { TenantId, AuthIdentity } from '../tenant/tenant.decorator';
 import type { SessionIdentity } from '../auth/session.types';
 import { AssignmentService } from './assignment.service';
-import { validateAssignInput, validateCreateTaskInput, normalizeCreateTaskInput } from './assignment.validation';
+import {
+  validateAssignInput,
+  validateCreateTaskInput,
+  validateDecisionInput,
+  normalizeCreateTaskInput,
+  isUuid,
+} from './assignment.validation';
 
 /** Who performed the assignment — session-derived (never client-supplied). Recorded on the event. */
 function actorOf(identity: SessionIdentity | undefined): string {
@@ -53,5 +66,24 @@ export class AssignmentController {
     const err = validateCreateTaskInput(body);
     if (err) throw new BadRequestException(err);
     return this.assignments.createTask(tenantId, normalizeCreateTaskInput(body), actorOf(identity));
+  }
+
+  /**
+   * The manager's single-authority THREE-STATE decision on a task's flow. This is the ONLY path that
+   * moves a flow's lifecycle — there is no automatic escalation or auto-resubmission. APPROVE closes
+   * the flow (terminal); REJECT keeps it open (same flow) with a structured reason the employee sees;
+   * SHELVE leaves it in the queue silently. Manager-only (RolesGuard); actor is session-derived.
+   */
+  @Post('tasks/:id/decide')
+  decide(
+    @TenantId() tenantId: string,
+    @AuthIdentity() identity: SessionIdentity | undefined,
+    @Param('id') id: string,
+    @Body() body: TaskDecisionInput,
+  ): Promise<TaskDecisionResult> {
+    if (!isUuid(id)) throw new BadRequestException('task id (uuid) is required');
+    const err = validateDecisionInput(body);
+    if (err) throw new BadRequestException(err);
+    return this.assignments.decide(tenantId, id, body, actorOf(identity));
   }
 }

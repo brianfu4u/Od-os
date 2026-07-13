@@ -9,6 +9,7 @@ import type { PoolClient } from 'pg';
 import type { MyTaskSummary } from '@clearview/shared';
 import { withTenant } from '../database/tenant-context';
 import type { SessionIdentity } from '../auth/session.types';
+import { rejectionFrom } from '../assignments/assignment.repository';
 
 interface TaskRow {
   id: string;
@@ -19,6 +20,10 @@ interface TaskRow {
   confidence: string | null;
   updated_at: string;
   room_label: string | null;
+  flow_state: string | null;
+  rej_payload: Record<string, unknown> | null;
+  rej_at: string | null;
+  rej_total: number | null;
 }
 
 function str(v: unknown): string | null {
@@ -28,6 +33,10 @@ function str(v: unknown): string | null {
 function mapTask(r: TaskRow): MyTaskSummary {
   const p = r.properties ?? {};
   const taskType = str(p.taskType);
+  const flowState = r.flow_state === 'closed' ? 'closed' : r.flow_state === 'pending' ? 'pending' : null;
+  // The employee only sees a rejection banner while the flow is OPEN (pending). Once APPROVED
+  // (closed) the task is done and the (historical) rejection is no longer surfaced as an action.
+  const rejection = flowState === 'pending' ? rejectionFrom(r.rej_payload, r.rej_at, r.rej_total) : null;
   return {
     taskId: r.id,
     taskType,
@@ -39,6 +48,8 @@ function mapTask(r: TaskRow): MyTaskSummary {
     confidence: r.confidence === null ? null : Number(r.confidence),
     dueBy: str(p.dueBy),
     updatedAt: new Date(r.updated_at).toISOString(),
+    flowState,
+    rejection,
   };
 }
 
@@ -56,7 +67,9 @@ export class TasksRepository {
       if (!staffId) return [];
       const res = await c.query<TaskRow>(
         `SELECT t.id, t.properties, t.expected_state, t.claimed_state, t.verified_state, t.confidence, t.updated_at,
-                room.label AS room_label
+                t.flow_state,
+                room.label AS room_label,
+                rej.payload AS rej_payload, rej.created_at AS rej_at, rej.total AS rej_total
            FROM objects t
            JOIN links la ON la.to_object = t.id AND la.relation = 'assignedTo' AND la.from_object = $1
            LEFT JOIN LATERAL (
@@ -67,6 +80,14 @@ export class TasksRepository {
               ORDER BY r.created_at ASC
               LIMIT 1
            ) room ON true
+           LEFT JOIN LATERAL (
+             SELECT e.payload, e.created_at,
+                    (SELECT COUNT(*) FROM events WHERE object_id = t.id AND event_type = 'task.flow.rejected')::int AS total
+               FROM events e
+              WHERE e.object_id = t.id AND e.event_type = 'task.flow.rejected'
+              ORDER BY e.created_at DESC
+              LIMIT 1
+           ) rej ON true
           WHERE t.type = 'Task'
             AND (t.properties->>'archived') IS DISTINCT FROM 'true'
           ORDER BY t.updated_at DESC

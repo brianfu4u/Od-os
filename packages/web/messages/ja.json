@@ -357,7 +357,24 @@
     "pick": "対象にして報告",
     "picked": "対象に設定",
     "loadFailed": "マイタスクの読み込みに失敗",
-    "claimed": "申告"
+    "claimed": "申告",
+    "flow": {
+      "pending": "レビュー待ち",
+      "approved": "承認済み",
+      "rejected": "差し戻し",
+      "rejectionTitle": "マネージャーが差し戻しました——修正して再提出してください",
+      "rejectionCount": "差し戻し {count} 回",
+      "resubmit": "修正して再提出",
+      "doneNote": "承認済み——タスク完了"
+    },
+    "reject": {
+      "missing_evidence": "証拠不足",
+      "evidence_unclear": "証拠が不明瞭",
+      "wrong_task": "タスク相違",
+      "incomplete_work": "作業が不完全",
+      "needs_more_detail": "詳細が必要",
+      "other": "その他"
+    }
   },
   "ops": {
     "title": "運用",
@@ -397,7 +414,21 @@
     "unassigned": "未割り当て",
     "assignee": "担当",
     "assignTo": "割り当て…",
-    "staffEmpty": "割当可能な担当なし"
+    "staffEmpty": "割当可能な担当なし",
+    "flow": {
+      "pending": "未処理",
+      "closed": "クローズ済み",
+      "rejected": "差し戻し",
+      "lastReject": "前回の差し戻し",
+      "closedNote": "承認でフロークローズ——終態、再開不可。"
+    },
+    "decide": {
+      "approve": "承認",
+      "reject": "差し戻し",
+      "shelve": "保留",
+      "confirmReject": "差し戻しを確定",
+      "detailPlaceholder": "詳細（任意、従業員に表示）"
+    }
   },
   "support": {
     "title": "応援要請",

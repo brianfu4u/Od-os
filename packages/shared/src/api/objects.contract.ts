@@ -2,6 +2,7 @@
  * S1-1 object API contract (the S0-4 read/write shapes the frontend + later
  * tickets build against). Kept in @clearview/shared so api and web share one source.
  */
+import type { TaskFlowState, TaskRejection } from './assignment.contract';
 
 /** Create a new ontology object. `type` is required; per-type fields go in `properties`. */
 export interface CreateObjectInput {
@@ -118,4 +119,16 @@ export interface MyTaskSummary {
   confidence: number | null;
   dueBy: string | null;
   updatedAt: string;
+  /**
+   * Flow lifecycle as the employee sees it: `pending` (open — awaiting a manager decision, possibly
+   * after a rejection) or `closed` (the manager APPROVED it; terminal). verifiedState is S2 reference
+   * data and is NOT the flow state — only a manager's explicit APPROVE closes the flow.
+   */
+  flowState: TaskFlowState | null;
+  /**
+   * If the manager REJECTED this task in its current open flow, the structured reason + optional
+   * detail the employee must see before resubmitting. Null when never rejected (or after a fresh
+   * approve/creation). Persisted from the append-only rejection event.
+   */
+  rejection: TaskRejection | null;
 }
