@@ -14,6 +14,12 @@ const VERIFY_STYLE: Record<string, string> = {
   unverified: 'bg-slate-700/60 text-slate-400',
 };
 const KNOWN = ['verified', 'conflict', 'pending', 'unverified'];
+const EVIDENCE_KINDS = new Set(['snapshot', 'document', 'qr_scan', 'communication', 'cross_object', 'timing']);
+
+/** Localise an evidence kind, falling back to the raw key for any kind without a string. */
+function evidenceLabel(t: ReturnType<typeof useTranslations>, kind: string): string {
+  return EVIDENCE_KINDS.has(kind) ? t(`evidence.${kind}`) : kind;
+}
 
 /**
  * T5 · "My tasks" — the staff's own assigned task queue (read-only projection from GET /tasks/mine).
@@ -95,12 +101,38 @@ export function MyTasks({ api, onPick }: { api: Api; onPick: (task: MyTaskSummar
                     {task.confidence != null ? ` · ${pct(task.confidence)}` : ''}
                   </span>
                 </div>
+
+                {/*
+                  Closed-loop step 6 — the staff-facing send-back / escalation states. These are
+                  ACTIONS/STATUS distinct from the verdict badge above, so they get their own banner
+                  vocabulary. `escalatedToManager` wins over `needsResubmission` (mutually exclusive
+                  server-side, but guard here too): once escalated the staff is NOT asked to resubmit.
+                */}
+                {task.escalatedToManager ? (
+                  <div className="mt-2 rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-2">
+                    <p className="text-[11px] font-semibold text-violet-200">{t('mytasks.escalated.title')}</p>
+                    <p className="mt-0.5 text-[11px] text-violet-300/80">{t('mytasks.escalated.body')}</p>
+                  </div>
+                ) : task.needsResubmission ? (
+                  <div className="mt-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2">
+                    <p className="text-[11px] font-semibold text-amber-200">{t('mytasks.resubmit.title')}</p>
+                    {task.requiredMissing.length > 0 ? (
+                      <p className="mt-0.5 text-[11px] text-amber-300/90">
+                        {t('mytasks.resubmit.missing')}: {task.requiredMissing.map((k) => evidenceLabel(t, k)).join('、')}
+                      </p>
+                    ) : null}
+                    {task.lastResubmissionReason ? (
+                      <p className="mt-0.5 text-[11px] text-amber-300/70">{task.lastResubmissionReason}</p>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <button
                   type="button"
                   onClick={() => onPick(task)}
                   className="mt-2 min-h-9 w-full rounded-xl border border-sky-500/50 bg-sky-500/10 px-3 py-1.5 text-sm font-medium text-sky-200 active:bg-sky-500/20"
                 >
-                  {t('mytasks.pick')}
+                  {task.needsResubmission ? t('mytasks.resubmit.action') : t('mytasks.pick')}
                 </button>
               </div>
             );

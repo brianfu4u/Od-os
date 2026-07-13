@@ -357,7 +357,16 @@
     "pick": "选为当前对象并上报",
     "picked": "已选为对象",
     "loadFailed": "加载我的任务失败",
-    "claimed": "声称"
+    "claimed": "声称",
+    "resubmit": {
+      "title": "被打回 — 补充证据后重新提交",
+      "missing": "缺少",
+      "action": "补充证据并重新提交"
+    },
+    "escalated": {
+      "title": "已升级 — 等待经理审阅",
+      "body": "该任务已重新提交，但仍无法自动验证。经理将进行审阅，你无需再操作。"
+    }
   },
   "ops": {
     "title": "运维",
@@ -412,5 +421,13 @@
       "equipment": "设备",
       "other": "其它"
     }
+  },
+  "evidence": {
+    "snapshot": "照片",
+    "document": "文档",
+    "qr_scan": "扫码",
+    "communication": "消息",
+    "cross_object": "关联记录",
+    "timing": "时间"
   }
 }

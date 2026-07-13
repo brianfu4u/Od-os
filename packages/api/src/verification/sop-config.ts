@@ -4,6 +4,16 @@ import { BASE_SELF_CLAIM } from './scorer';
 const DEFAULT_THRESHOLD = 0.85;
 
 /**
+ * Resubmission (回退重提) attempt cap — the number of times a failing CLAIMED task is bounced
+ * BACK TO THE STAFF before the ball moves to the MANAGER. `1` means: staff get exactly ONE
+ * "add the missing evidence and resubmit" nudge; if the resubmission still fails, we stop nagging
+ * the staff and ESCALATE to the manager instead (closed-loop step 6 terminal path). Defined ONCE
+ * here so the whole loop (event emission in verify + the escalation agent + the read projection)
+ * shares a single source of truth; raising it to N bounces is a one-line change.
+ */
+export const MAX_STAFF_RESUBMITS = 1;
+
+/**
  * Base confidence for a lone, matching self-claim BEFORE any independent evidence.
  *
  * ── The base-0.50-vs-0.76 decision — RESOLVED at the S0-7 clinic freeze: 0.50 ──

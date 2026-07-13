@@ -118,4 +118,28 @@ export interface MyTaskSummary {
   confidence: number | null;
   dueBy: string | null;
   updatedAt: string;
+  /**
+   * Resubmission (回退重提) — all four are READ-ONLY projections derived from the append-only
+   * `task.resubmission.requested` events + verification ledger. They describe "the deterministic S2
+   * engine returned a non-verified verdict that requires the staff to add evidence and resubmit".
+   * The engine (S2) still owns verifiedState; these fields never feed back into the verdict.
+   */
+  /**
+   * True when the latest verify was non-verified AND asked THE STAFF to add evidence & resubmit
+   * (i.e. still within the staff bounce-back cap). Mutually exclusive with `escalatedToManager`:
+   * once a task escalates, the staff has no further action and this flips back to false.
+   */
+  needsResubmission: boolean;
+  /** Evidence kinds still missing on the most recent resubmission request (empty when none). */
+  requiredMissing: string[];
+  /** How many times this task has been sent back to the STAFF for resubmission (append-only count). */
+  resubmissionCount: number;
+  /** Human-readable reason from the most recent resubmission request (null when none). */
+  lastResubmissionReason: string | null;
+  /**
+   * True when the task exhausted its staff bounce-backs (MAX_STAFF_RESUBMITS) and is now AWAITING
+   * MANAGER REVIEW (a `task.resubmission.escalated` marker exists and the task is still non-verified).
+   * The staff must NOT resubmit again — the ball is in the manager's court. Derived, read-only.
+   */
+  escalatedToManager: boolean;
 }

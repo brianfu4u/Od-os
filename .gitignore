@@ -33,3 +33,4 @@ pnpm-debug.log*
 
 # local postgres data (if bind-mounted)
 /.pgdata/
+packages/api/var/

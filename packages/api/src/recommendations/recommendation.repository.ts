@@ -63,6 +63,10 @@ export class RecommendationRepository {
           }
         : null;
 
+      // Resubmission escalation (closed-loop step 6): the latest `task.resubmission.escalated` marker
+      // (if any) is what tips this task into a manager cue. Read-through only.
+      const resubmissionEscalation = await this.readResubmissionEscalation(c, objectId);
+
       return {
         object: {
           id: o.id,
@@ -73,9 +77,30 @@ export class RecommendationRepository {
           confidence: o.confidence === null ? null : Number(o.confidence),
         },
         alert,
+        resubmissionEscalation,
         now: Date.now(),
       };
     });
+  }
+
+  /** Latest resubmission-escalation marker for an object → the agent's escalation signal (or undefined). */
+  private async readResubmissionEscalation(
+    c: PoolClient,
+    objectId: string,
+  ): Promise<AgentContext['resubmissionEscalation']> {
+    const res = await c.query<{ payload: Record<string, unknown> }>(
+      `SELECT payload FROM events WHERE object_id = $1 AND event_type = 'task.resubmission.escalated'
+        ORDER BY created_at DESC LIMIT 1`,
+      [objectId],
+    );
+    const p = res.rows[0]?.payload;
+    if (!p) return undefined;
+    return {
+      firstReason: typeof p.firstReason === 'string' ? p.firstReason : null,
+      latestReason: typeof p.latestReason === 'string' ? p.latestReason : null,
+      requiredMissing: Array.isArray(p.requiredMissing) ? p.requiredMissing.filter((k): k is string => typeof k === 'string') : [],
+      resubmissionCount: typeof p.resubmissionCount === 'number' ? p.resubmissionCount : 0,
+    };
   }
 
   /**
@@ -122,6 +147,24 @@ export class RecommendationRepository {
         }
       }
 
+      // Latest resubmission-escalation marker per object (batched) so escalated tasks surface a
+      // manager cue on a full sweep too, not only on the live per-object verification path.
+      const escRows = await c.query<{ object_id: string; payload: Record<string, unknown> }>(
+        `SELECT DISTINCT ON (object_id) object_id, payload
+           FROM events WHERE event_type = 'task.resubmission.escalated'
+          ORDER BY object_id, created_at DESC`,
+      );
+      const latestEscalation = new Map<string, AgentContext['resubmissionEscalation']>();
+      for (const r of escRows.rows) {
+        const p = r.payload ?? {};
+        latestEscalation.set(r.object_id, {
+          firstReason: typeof p.firstReason === 'string' ? p.firstReason : null,
+          latestReason: typeof p.latestReason === 'string' ? p.latestReason : null,
+          requiredMissing: Array.isArray(p.requiredMissing) ? p.requiredMissing.filter((k): k is string => typeof k === 'string') : [],
+          resubmissionCount: typeof p.resubmissionCount === 'number' ? p.resubmissionCount : 0,
+        });
+      }
+
       const now = Date.now();
       return objs.rows.map((o) => ({
         object: {
@@ -134,6 +177,7 @@ export class RecommendationRepository {
         },
         alert: latestAlert.get(o.id) ?? null,
         related: o.type === 'Equipment' ? { usageScan: scannedEquipment.has(o.id) } : undefined,
+        resubmissionEscalation: latestEscalation.get(o.id),
         now,
       }));
     });

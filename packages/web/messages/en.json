@@ -357,7 +357,16 @@
     "pick": "Use as subject & report",
     "picked": "Picked as subject",
     "loadFailed": "Failed to load my tasks",
-    "claimed": "claimed"
+    "claimed": "claimed",
+    "resubmit": {
+      "title": "Send-back — add evidence & resubmit",
+      "missing": "Missing",
+      "action": "Add evidence & resubmit"
+    },
+    "escalated": {
+      "title": "Escalated — awaiting manager review",
+      "body": "This task was resubmitted but still couldn't be auto-verified. A manager will review it — no further action needed from you."
+    }
   },
   "ops": {
     "title": "Ops",
@@ -412,5 +421,13 @@
       "equipment": "Equipment",
       "other": "Other"
     }
+  },
+  "evidence": {
+    "snapshot": "Photo",
+    "document": "Document",
+    "qr_scan": "QR scan",
+    "communication": "Message",
+    "cross_object": "Linked record",
+    "timing": "Timing"
   }
 }
