@@ -267,6 +267,54 @@ export async function runHttpSmoke({
   check(Array.isArray(tl.events) && tl.events.length >= 1, `timeline has events (${tl.events?.length ?? 0})`);
   check(Array.isArray(tl.ledger) && tl.ledger.length >= 1, `timeline has verification-ledger rows (${tl.ledger?.length ?? 0})`);
 
+  // ── flow-id manager three-state decision (single authority) over the wire ──
+  log('\nflow decision (manager single authority):');
+  const mgr = await (
+    await fetch(`${base}/auth/manager/dev-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tenantId: tenant, login: 'smoke-mgr', displayName: 'Smoke Mgr' }),
+    })
+  ).json();
+  check(!!mgr.token, 'POST /auth/manager/dev-login issues a manager session');
+  const MH = { Authorization: `Bearer ${mgr.token}`, 'Content-Type': 'application/json' };
+  const decide = (id, body) => fetch(`${base}/assignments/tasks/${id}/decide`, { method: 'POST', headers: MH, body: JSON.stringify(body) });
+
+  const flowTask = await (
+    await fetch(`${base}/assignments/tasks`, { method: 'POST', headers: MH, body: JSON.stringify({ label: 'Flow smoke task', taskType: 'prep' }) })
+  ).json();
+  check(!!flowTask.taskId, 'manager createTask returns a task (its own flow)');
+  const fid = flowTask.taskId;
+
+  // REJECT keeps the flow open (pending) with a structured reason — does NOT close it.
+  const rej = await decide(fid, { decision: 'reject', rejectionReasonCategory: 'missing_evidence', rejectionReasonDetail: 'need the tray photo' });
+  const rejBody = await rej.json();
+  check(rej.ok && rejBody.flowState === 'pending' && rejBody.flowId === fid, `REJECT keeps flow pending, same flow_id (got ${rejBody.flowState})`);
+
+  // REJECT without a valid category is refused (structured reason is required).
+  const badRej = await decide(fid, { decision: 'reject' });
+  check(badRej.status === 400, `REJECT without a category → 400 (got ${badRej.status})`);
+
+  // The rejection reason is surfaced on the manager overview (same read projection the employee sees).
+  const asg = await (await fetch(`${base}/assignments/overview`, { headers: { Authorization: `Bearer ${mgr.token}` } })).json();
+  const asgTask = (asg.tasks || []).find((t) => t.taskId === fid);
+  check(asgTask?.rejection?.category === 'missing_evidence', 'assignments/overview surfaces the structured rejection reason');
+
+  // APPROVE closes the flow (terminal), and a closed flow can never be re-decided (→ 409).
+  const app = await decide(fid, { decision: 'approve' });
+  const appBody = await app.json();
+  check(app.ok && appBody.flowState === 'closed', `APPROVE closes the flow (got ${appBody.flowState})`);
+  const reApp = await decide(fid, { decision: 'approve' });
+  check(reApp.status === 409, `APPROVE on a closed flow → 409 terminal (got ${reApp.status})`);
+
+  // A staff session cannot decide — the endpoint is manager-only (→ 403).
+  const staffDecide = await fetch(`${base}/assignments/tasks/${fid}/decide`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${login.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ decision: 'shelve' }),
+  });
+  check(staffDecide.status === 403, `staff session on manager-only decide → 403 (got ${staffDecide.status})`);
+
   ac.abort();
   await ssePromise;
   check(sseEvents >= 1, `SSE stream emitted ${sseEvents} change event(s) during the loop`);

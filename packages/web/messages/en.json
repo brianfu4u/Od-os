@@ -357,7 +357,24 @@
     "pick": "Use as subject & report",
     "picked": "Picked as subject",
     "loadFailed": "Failed to load my tasks",
-    "claimed": "claimed"
+    "claimed": "claimed",
+    "flow": {
+      "pending": "Pending review",
+      "approved": "Approved",
+      "rejected": "Returned",
+      "rejectionTitle": "Returned by manager — please address and resubmit",
+      "rejectionCount": "returned {count}×",
+      "resubmit": "Revise & resubmit",
+      "doneNote": "Approved — task complete"
+    },
+    "reject": {
+      "missing_evidence": "Missing evidence",
+      "evidence_unclear": "Evidence unclear",
+      "wrong_task": "Wrong task",
+      "incomplete_work": "Incomplete work",
+      "needs_more_detail": "Needs more detail",
+      "other": "Other"
+    }
   },
   "ops": {
     "title": "Ops",
@@ -397,7 +414,21 @@
     "unassigned": "Unassigned",
     "assignee": "Assignee",
     "assignTo": "Assign to…",
-    "staffEmpty": "No staff"
+    "staffEmpty": "No staff",
+    "flow": {
+      "pending": "Pending",
+      "closed": "Closed",
+      "rejected": "Returned",
+      "lastReject": "Last return",
+      "closedNote": "Flow closed on approval — terminal, no reopen."
+    },
+    "decide": {
+      "approve": "Approve",
+      "reject": "Reject",
+      "shelve": "Shelve",
+      "confirmReject": "Confirm rejection",
+      "detailPlaceholder": "Detail (optional, shown to employee)"
+    }
   },
   "support": {
     "title": "Request support",

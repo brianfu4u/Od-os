@@ -1,4 +1,5 @@
-import type { AssignTaskInput, CreateTaskInput } from '@clearview/shared';
+import type { AssignTaskInput, CreateTaskInput, TaskDecisionInput } from '@clearview/shared';
+import { isRejectionReasonCategory } from '@clearview/shared';
 
 /**
  * Pure input validation for the manager assignment endpoints (unit-testable without Nest). Returns
@@ -35,6 +36,33 @@ export function validateCreateTaskInput(body: Partial<CreateTaskInput> | undefin
   }
   if (body.staffId !== undefined && body.staffId !== null && !isUuid(body.staffId)) {
     return 'staffId (uuid) is invalid';
+  }
+  return null;
+}
+
+const MAX_REJECTION_DETAIL = 1000;
+
+/**
+ * Validate a manager decision. `decision` must be one of the three states. On `reject`, a valid
+ * structured `rejectionReasonCategory` is REQUIRED; an optional free-text `rejectionReasonDetail`
+ * (bounded length) may accompany it. For approve/shelve, reason fields are ignored.
+ */
+export function validateDecisionInput(body: Partial<TaskDecisionInput> | undefined): string | null {
+  if (!body) return 'body is required';
+  if (body.decision !== 'approve' && body.decision !== 'reject' && body.decision !== 'shelve') {
+    return "decision must be one of 'approve' | 'reject' | 'shelve'";
+  }
+  if (body.decision === 'reject') {
+    if (!isRejectionReasonCategory(body.rejectionReasonCategory)) {
+      return 'rejectionReasonCategory is required and must be a known category when rejecting';
+    }
+    if (
+      body.rejectionReasonDetail !== undefined &&
+      body.rejectionReasonDetail !== null &&
+      (typeof body.rejectionReasonDetail !== 'string' || body.rejectionReasonDetail.length > MAX_REJECTION_DETAIL)
+    ) {
+      return `rejectionReasonDetail must be a string of at most ${MAX_REJECTION_DETAIL} characters`;
+    }
   }
   return null;
 }

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ObjectsModule } from '../objects/objects.module';
 import { AssignmentController } from './assignment.controller';
 import { AssignmentService } from './assignment.service';
 import { AssignmentRepository } from './assignment.repository';
@@ -10,6 +11,7 @@ import { AssignmentRepository } from './assignment.repository';
  * @UseGuards(TenantGuard, RolesGuard) resolves without extra wiring.
  */
 @Module({
+  imports: [ObjectsModule], // for RealtimeService (employee-facing SSE on approve/reject)
   controllers: [AssignmentController],
   providers: [AssignmentService, AssignmentRepository],
 })

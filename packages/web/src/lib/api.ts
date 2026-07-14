@@ -12,6 +12,8 @@ import type {
   AssignmentOverview,
   AssignmentResult,
   CreateTaskInput,
+  TaskDecisionInput,
+  TaskDecisionResult,
   MyTaskSummary,
   ObjectTimeline,
   OntologyObject,
@@ -198,6 +200,21 @@ export function makeApi(auth?: string | ApiAuth) {
     async createTask(input: CreateTaskInput): Promise<AssignmentResult> {
       return json(
         await fetch(`${API_BASE}/assignments/tasks`, {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(input),
+        }),
+      );
+    },
+
+    /**
+     * Manager single-authority THREE-STATE decision on a task flow (manager-only). approve closes the
+     * flow (terminal); reject keeps it open with a structured reason the employee sees; shelve leaves
+     * it silently in the queue. Server enforces manager via RolesGuard + scopes by RLS.
+     */
+    async decideTask(taskId: string, input: TaskDecisionInput): Promise<TaskDecisionResult> {
+      return json(
+        await fetch(`${API_BASE}/assignments/tasks/${taskId}/decide`, {
           method: 'POST',
           headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify(input),

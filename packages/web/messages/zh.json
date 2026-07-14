@@ -357,7 +357,24 @@
     "pick": "选为当前对象并上报",
     "picked": "已选为对象",
     "loadFailed": "加载我的任务失败",
-    "claimed": "声称"
+    "claimed": "声称",
+    "flow": {
+      "pending": "待审核",
+      "approved": "已通过",
+      "rejected": "已退回",
+      "rejectionTitle": "经理已退回——请修改后重新提交",
+      "rejectionCount": "已退回 {count} 次",
+      "resubmit": "修改并重新提交",
+      "doneNote": "已通过——任务完成"
+    },
+    "reject": {
+      "missing_evidence": "缺少凭证",
+      "evidence_unclear": "凭证不清晰",
+      "wrong_task": "任务不符",
+      "incomplete_work": "完成不完整",
+      "needs_more_detail": "需补充细节",
+      "other": "其他"
+    }
   },
   "ops": {
     "title": "运维",
@@ -397,7 +414,21 @@
     "unassigned": "未指派",
     "assignee": "负责人",
     "assignTo": "指派给…",
-    "staffEmpty": "无可指派员工"
+    "staffEmpty": "无可指派员工",
+    "flow": {
+      "pending": "待处理",
+      "closed": "已关闭",
+      "rejected": "已退回",
+      "lastReject": "上次退回",
+      "closedNote": "批准后流程关闭——终态，不可重开。"
+    },
+    "decide": {
+      "approve": "批准",
+      "reject": "退回",
+      "shelve": "搂置",
+      "confirmReject": "确认退回",
+      "detailPlaceholder": "说明（可选，将展示给员工）"
+    }
   },
   "support": {
     "title": "申请支援",
