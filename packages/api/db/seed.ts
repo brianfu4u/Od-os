@@ -88,6 +88,25 @@ async function ledger(
   );
 }
 
+// T-01: record an employee status CLAIM. Projects the current claim onto the Staff object
+// (objects.claimed_state), appends an immutable row to employee_status_claims, and emits an
+// `employee.status.claimed` event. verification_result is left NULL (silent check runs later).
+async function statusClaim(
+  client: Client,
+  tenantId: string,
+  employeeId: string,
+  claimedStatus: string,
+  note: string | null = null,
+): Promise<void> {
+  await client.query(
+    `INSERT INTO employee_status_claims (tenant_id, employee_id, claimed_status, claim_source, note)
+     VALUES ($1, $2, $3, 'button', $4)`,
+    [tenantId, employeeId, claimedStatus, note],
+  );
+  await client.query(`UPDATE objects SET claimed_state = $2 WHERE id = $1`, [employeeId, claimedStatus]);
+  await event(client, tenantId, employeeId, 'employee.status.claimed', { claimedStatus }, 'employee');
+}
+
 async function seedTenantA(client: Client): Promise<void> {
   const t = TENANT_A;
 
@@ -97,6 +116,9 @@ async function seedTenantA(client: Client): Promise<void> {
   const staffTech = await insObject(client, t, 'Staff', {
     properties: { role: 'tech', displayName: 'A · Tech' },
   });
+  // T-01: give each worker an initial on-duty claim so status/freshness reads have data.
+  await statusClaim(client, t, staffFront, 'on_duty');
+  await statusClaim(client, t, staffTech, 'on_duty');
 
   const room3 = await insObject(client, t, 'Room', {
     properties: { label: 'Room 3' },
