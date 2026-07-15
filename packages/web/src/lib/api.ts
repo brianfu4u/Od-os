@@ -12,6 +12,10 @@ import type {
   AssignmentOverview,
   AssignmentResult,
   CreateTaskInput,
+  EmployeeStatusView,
+  ScanAck,
+  SubmitScanInput,
+  SubmitStatusClaimInput,
   TaskDecisionInput,
   TaskDecisionResult,
   MyTaskSummary,
@@ -144,6 +148,48 @@ export function makeApi(auth?: string | ApiAuth) {
       return json(
         await fetch(`${API_BASE}/objects/resolve?code=${encodeURIComponent(code)}`, { headers: authHeaders(), signal }),
       );
+    },
+
+    /**
+     * T-08 · EMPLOYEE status submission (CLAIM layer). POST /employee-status/claims.
+     *
+     * NEVER rejected/blocked for a valid five-state, and the response is the employee-facing
+     * `EmployeeStatusView` — CLAIM ONLY. It carries no verificationResult / confidence / verdict, and
+     * no AI/evaluative feedback ever flows back to the employee. The button tap takes effect at once.
+     */
+    async submitStatusClaim(input: SubmitStatusClaimInput): Promise<EmployeeStatusView> {
+      return json(
+        await fetch(`${API_BASE}/employee-status/claims`, {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(input),
+        }),
+      );
+    },
+
+    /**
+     * T-08 · patient SCAN submission (neutral append-only contact event). POST /scans.
+     *
+     * A scan is never blocked; `note`/attachments are optional and non-blocking. The `ScanAck` reply
+     * is neutral — `visitLinkStatus` only reports whether the raw code resolved to a visit id, NOT
+     * whether the scan was "valid". No business verdict is returned to the employee.
+     */
+    async submitScan(input: SubmitScanInput): Promise<ScanAck> {
+      return json(
+        await fetch(`${API_BASE}/scans`, {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(input),
+        }),
+      );
+    },
+
+    /**
+     * T-08 · the caller's OWN current status (CLAIM layer only). GET /employee-status/me.
+     * Returns `EmployeeStatusView` — claimedStatus / note / claimedAt, never any verification field.
+     */
+    async employeeStatusMe(signal?: AbortSignal): Promise<EmployeeStatusView> {
+      return json(await fetch(`${API_BASE}/employee-status/me`, { headers: authHeaders(), signal }));
     },
 
     /**

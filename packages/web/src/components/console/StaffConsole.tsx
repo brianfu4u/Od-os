@@ -11,6 +11,8 @@ import { safeStorage } from '../../lib/safe-storage';
 import { CameraScanner } from './CameraScanner';
 import { AudioRecorder } from './AudioRecorder';
 import { MyTasks } from './MyTasks';
+import { EmployeeStatusBar } from './EmployeeStatusBar';
+import { ScanEntry } from './ScanEntry';
 import {
   clearStaffToken,
   fetchMe,
@@ -440,6 +442,12 @@ export function StaffConsole() {
       </header>
 
       <div className="mx-auto max-w-md space-y-4 px-4 py-4">
+        {/* T-08 · employee self-status (CLAIM layer). Never rejected, never shows a verdict. */}
+        {api ? <EmployeeStatusBar api={api} /> : null}
+
+        {/* T-08 · dedicated patient-scan entry (neutral append-only contact event). */}
+        {api ? <ScanEntry api={api} /> : null}
+
         {/* clock in/out */}
         <section className={CARD}>
           <h2 className="text-sm font-semibold">{t('console.clock.title')}</h2>

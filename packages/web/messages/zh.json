@@ -443,5 +443,37 @@
       "equipment": "设备",
       "other": "其它"
     }
+  },
+  "employeeStatus": {
+    "title": "我的状态",
+    "hint": "点一下即生效，无需确认；说明可留可不留。",
+    "none": "尚未声明",
+    "currentIs": "当前：{status}",
+    "submitting": "提交中…",
+    "noteLabel": "说明（可选）",
+    "notePlaceholder": "想补充点什么就写，不写也行…",
+    "status": {
+      "on_duty": "在岗",
+      "busy": "忙碌",
+      "idle": "空闲",
+      "rest": "休息",
+      "off_duty": "离岗"
+    }
+  },
+  "scanEntry": {
+    "title": "扫患者码",
+    "hint": "扫一下即记录，不会被驳回；未匹配也照常保存。",
+    "scan": "扫描患者码",
+    "submitting": "提交中…",
+    "ack": {
+      "code": "患者码",
+      "visit": "就诊号",
+      "link": "关联结果",
+      "at": "时间"
+    },
+    "linkStatus": {
+      "resolved": "已关联就诊号",
+      "unresolved": "暂未关联（仍已记录）"
+    }
   }
 }
