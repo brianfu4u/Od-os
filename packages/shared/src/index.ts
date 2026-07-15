@@ -21,3 +21,4 @@ export * from './api/assignment.contract';
 export * from './api/employee-status.contract';
 export * from './api/scan.contract';
 export * from './api/freshness.contract';
+export * from './api/attention.contract';

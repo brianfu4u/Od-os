@@ -357,6 +357,22 @@ export async function runHttpSmoke({
   await ssePromise;
   check(sseEvents >= 1, `SSE stream emitted ${sseEvents} change event(s) during the loop`);
 
+  // ── attention queue (P0 stage 3): manager-only, read-only ──
+  log('\nmanager attention queue (P0 stage 3):');
+  // A manager session can read the queue; the shape is { items: [...] } and every item exposes only
+  // the whitelisted, neutral keys — no employee-facing feedback / verdict / instruction field.
+  const attnResp = await fetch(`${base}/attention/queue`, { headers: MH });
+  const attnBody = await attnResp.json().catch(() => ({}));
+  check(attnResp.ok && Array.isArray(attnBody.items), `GET /attention/queue (manager) → ok with items[] (got ${attnResp.status})`);
+  const ALLOWED_ITEM_KEYS = ['employeeId', 'employeeName', 'evidenceSummary', 'generatedAt', 'id', 'kind', 'lastEventAt'];
+  const badItem = (attnBody.items ?? []).find(
+    (it) => JSON.stringify(Object.keys(it).sort()) !== JSON.stringify(ALLOWED_ITEM_KEYS),
+  );
+  check(!badItem, 'attention items expose exactly the whitelisted keys (no employee-facing feedback field)');
+  // A staff session must NOT reach the manager-only queue.
+  const staffOnAttn = await fetch(`${base}/attention/queue`, { headers: SH });
+  check(staffOnAttn.status === 403, `staff session on manager-only /attention/queue → 403 (got ${staffOnAttn.status})`);
+
   return { passed, failed };
 }
 
