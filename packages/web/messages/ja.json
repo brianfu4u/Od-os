@@ -480,5 +480,37 @@
       "subtitle": "参考用の注目リスト（閲覧のみ・裁定の入口ではない）",
       "empty": "注目すべき項目はありません"
     }
+  },
+  "employeeStatus": {
+    "title": "自分の状態",
+    "hint": "タップで即反映・確認不要。メモは任意です。",
+    "none": "未申告",
+    "currentIs": "現在：{status}",
+    "submitting": "送信中…",
+    "noteLabel": "メモ（任意）",
+    "notePlaceholder": "必要なら記入、空欄でも可…",
+    "status": {
+      "on_duty": "勤務中",
+      "busy": "取り込み中",
+      "idle": "待機",
+      "rest": "休憩",
+      "off_duty": "退勤"
+    }
+  },
+  "scanEntry": {
+    "title": "患者コードをスキャン",
+    "hint": "スキャンで記録・却下なし。未照合でも記録されます。",
+    "scan": "患者コードをスキャン",
+    "submitting": "送信中…",
+    "ack": {
+      "code": "患者コード",
+      "visit": "受診ID",
+      "link": "照合結果",
+      "at": "時刻"
+    },
+    "linkStatus": {
+      "resolved": "受診IDに照合済み",
+      "unresolved": "未照合（記録済み）"
+    }
   }
 }

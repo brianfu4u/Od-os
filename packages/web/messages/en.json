@@ -480,5 +480,37 @@
       "subtitle": "Findings to look at (read-only, not an adjudication surface)",
       "empty": "Nothing needs attention"
     }
+  },
+  "employeeStatus": {
+    "title": "My status",
+    "hint": "One tap takes effect immediately — no confirm. A note is optional.",
+    "none": "Not set",
+    "currentIs": "Current: {status}",
+    "submitting": "Submitting…",
+    "noteLabel": "Note (optional)",
+    "notePlaceholder": "Add anything if you like — or leave it blank…",
+    "status": {
+      "on_duty": "On duty",
+      "busy": "Busy",
+      "idle": "Idle",
+      "rest": "Rest",
+      "off_duty": "Off duty"
+    }
+  },
+  "scanEntry": {
+    "title": "Scan patient",
+    "hint": "One scan records it — never rejected; unresolved codes are still saved.",
+    "scan": "Scan patient code",
+    "submitting": "Submitting…",
+    "ack": {
+      "code": "Patient code",
+      "visit": "Visit id",
+      "link": "Link result",
+      "at": "Time"
+    },
+    "linkStatus": {
+      "resolved": "Linked to a visit",
+      "unresolved": "Not linked yet (still recorded)"
+    }
   }
 }
