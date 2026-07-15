@@ -315,6 +315,44 @@ export async function runHttpSmoke({
   });
   check(staffDecide.status === 403, `staff session on manager-only decide → 403 (got ${staffDecide.status})`);
 
+  // ── T-04 employee status-claim + T-05 patient scan (business-flow P0, Stage 2) over the wire ──
+  // Proves real Nest DI boot + module wiring for the two new staff endpoints, and the two core
+  // principles end to end: a five-state claim is never rejected, and a scan is never blocked. The
+  // staff-facing responses carry the CLAIM layer only (no verification field leaks over HTTP).
+  log('\nemployee status-claim + patient scan (P0 stage 2):');
+  const SH = { Authorization: `Bearer ${login.token}`, 'Content-Type': 'application/json' };
+
+  // A well-formed five-state claim → 200/201, never a rejection path.
+  const claimResp = await fetch(`${base}/employee-status/claims`, {
+    method: 'POST',
+    headers: SH,
+    body: JSON.stringify({ claimedStatus: 'busy', note: 'smoke' }),
+  });
+  const claimBody = await claimResp.json();
+  check(claimResp.ok && claimBody.claimedStatus === 'busy', `POST /employee-status/claims → ok, status=busy (got ${claimResp.status})`);
+  // Field-projection guarantee over the wire: no verification key leaks to the employee.
+  check(
+    !('verificationResult' in claimBody) && !('verification_result' in claimBody) && !('verificationConfidence' in claimBody),
+    'employee claim response carries no verification field (projection)',
+  );
+
+  const meStatus = await (await fetch(`${base}/employee-status/me`, { headers: { Authorization: `Bearer ${login.token}` } })).json();
+  check(meStatus.claimedStatus === 'busy', 'GET /employee-status/me returns the latest claim (claim layer only)');
+
+  // An unknown status code is input shape (400), NOT a business rejection of the employee.
+  const badClaim = await fetch(`${base}/employee-status/claims`, { method: 'POST', headers: SH, body: JSON.stringify({ claimedStatus: 'lunch' }) });
+  check(badClaim.status === 400, `POST /employee-status/claims with an unknown status → 400 input shape (got ${badClaim.status})`);
+
+  // A scan with an unknown code is NEVER blocked — it stores as unresolved.
+  const scanResp = await fetch(`${base}/scans`, { method: 'POST', headers: SH, body: JSON.stringify({ patientCode: `smoke-unknown-${Date.now()}` }) });
+  const scanBody = await scanResp.json();
+  check(scanResp.ok && scanBody.visitLinkStatus === 'unresolved', `POST /scans (unknown code) → ok, unresolved, never blocked (got ${scanResp.status})`);
+  check(!!scanBody.scanId && !('verificationResult' in scanBody), 'scan ack carries a scan_id and no verdict (neutral)');
+
+  // A scan with no key at all → 400 (the only hard rule; mirrors the DB CHECK).
+  const emptyScan = await fetch(`${base}/scans`, { method: 'POST', headers: SH, body: JSON.stringify({}) });
+  check(emptyScan.status === 400, `POST /scans with no key → 400 at-least-one-key (got ${emptyScan.status})`);
+
   ac.abort();
   await ssePromise;
   check(sseEvents >= 1, `SSE stream emitted ${sseEvents} change event(s) during the loop`);
