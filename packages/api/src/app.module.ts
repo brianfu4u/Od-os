@@ -18,6 +18,7 @@ import { OpsModule } from './ops/ops.module';
 import { AssignmentsModule } from './assignments/assignment.module';
 import { EmployeeStatusModule } from './employee-status/employee-status.module';
 import { ScansModule } from './scans/scans.module';
+import { AttentionModule } from './attention/attention.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { ScansModule } from './scans/scans.module';
     AssignmentsModule,
     EmployeeStatusModule,
     ScansModule,
+    AttentionModule,
   ],
   controllers: [HealthController],
 })
