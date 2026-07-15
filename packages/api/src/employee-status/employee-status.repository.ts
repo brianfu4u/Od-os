@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { PoolClient } from 'pg';
-import type { EmployeeStatus, EmployeeStatusView } from '@clearview/shared';
+import type { EmployeeStatus, EmployeeStatusView, StatusBoardRow } from '@clearview/shared';
 import { withTenant } from '../database/tenant-context';
 import type { SessionIdentity } from '../auth/session.types';
 
@@ -22,6 +22,14 @@ interface ClaimRow {
   claimed_status: string;
   note: string | null;
   claimed_at: string;
+}
+
+interface BoardRow {
+  employee_id: string;
+  employee_name: string | null;
+  claimed_status: string | null;
+  last_event_at: string | null;
+  secs_since_event: string | number | null;
 }
 
 /**
@@ -119,6 +127,41 @@ export class EmployeeStatusRepository {
         note: row.note,
         claimedAt: new Date(row.claimed_at).toISOString(),
       };
+    });
+  }
+
+  /**
+   * MANAGER-side whole-roster status board (T-09 · D1-A). One row per in-roster Staff, joining the
+   * CLAIM layer (claimed_state on the Staff object) with the read-time freshness OBSERVATION
+   * (employee_freshness view). READ-ONLY: opens no write, mutates no world_state / claimed_status /
+   * flow_state, and appends NO event — unlike the attention queue this is a pure snapshot with no
+   * audit side-effect. NEVER selects verification_result / verification_confidence (field-projection
+   * guarantee). RLS scopes it to the caller's tenant. Employees with no valid event yet have
+   * last_event_at = null; consumers treat null freshness as "stale".
+   */
+  async statusBoard(tenantId: string): Promise<StatusBoardRow[]> {
+    return withTenant(tenantId, async (c) => {
+      const res = await c.query<BoardRow>(
+        `SELECT
+           s.id                                                        AS employee_id,
+           COALESCE(s.properties->>'displayName', s.properties->>'staffHandle', s.id::text) AS employee_name,
+           s.claimed_state                                             AS claimed_status,
+           f.last_event_at                                             AS last_event_at,
+           CASE WHEN f.last_event_at IS NULL THEN NULL
+                ELSE EXTRACT(EPOCH FROM (now() - f.last_event_at)) END  AS secs_since_event
+           FROM objects s
+           LEFT JOIN employee_freshness f ON f.employee_id = s.id
+          WHERE s.type = 'Staff'
+          ORDER BY employee_name ASC`,
+      );
+      return res.rows.map((row) => ({
+        employeeId: row.employee_id,
+        employeeName: row.employee_name ?? row.employee_id,
+        claimedStatus: row.claimed_status,
+        lastEventAt: row.last_event_at ? new Date(row.last_event_at).toISOString() : null,
+        secondsSinceLastEvent:
+          row.secs_since_event === null ? null : Math.floor(Number(row.secs_since_event)),
+      }));
     });
   }
 

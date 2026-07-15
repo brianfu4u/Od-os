@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
-import type { EmployeeStatusView, SubmitStatusClaimInput } from '@clearview/shared';
+import type { EmployeeStatusView, StatusBoardView, SubmitStatusClaimInput } from '@clearview/shared';
 import { TenantGuard } from '../tenant/tenant.guard';
 import { RolesGuard } from '../tenant/roles.guard';
 import { Roles } from '../tenant/roles.decorator';
@@ -46,5 +46,18 @@ export class EmployeeStatusController {
     @AuthIdentity() identity: SessionIdentity | undefined,
   ): Promise<EmployeeStatusView> {
     return this.service.me(tenantId, identity);
+  }
+
+  /**
+   * T-09 · D1-A · MANAGER-ONLY whole-roster status board (method-level @Roles('manager') OVERRIDES the
+   * class-level 'staff' via reflector.getAllAndOverride). READ-ONLY snapshot: no write, no event, no
+   * world-state mutation. Combines each Staff's CLAIM layer with the read-time freshness OBSERVATION;
+   * carries NO verification/LLM/adjudication field. Not a decision surface — the three-state verdict
+   * lives only in the assignments' decide() endpoint.
+   */
+  @Get('board')
+  @Roles('manager')
+  board(@TenantId() tenantId: string): Promise<StatusBoardView> {
+    return this.service.board(tenantId);
   }
 }

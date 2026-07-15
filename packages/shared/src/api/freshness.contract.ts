@@ -37,3 +37,26 @@ export interface EmployeeFreshness {
   lastEventAt: string | null;
   secondsSinceLastEvent: number | null;
 }
+
+/**
+ * MANAGER-FACING status-board row (T-09 · D1-A). One row per in-roster Staff, combining the CLAIM
+ * layer (`claimedStatus`, the employee's self-declared state) with the read-time freshness OBSERVATION
+ * (`secondsSinceLastEvent`). This is the whole-roster view — it includes employees with NO attention
+ * finding (i.e. "normal") so the manager sees everyone, not just those who surfaced in the queue.
+ *
+ * FIELD-PROJECTION GUARANTEE: read-only OBSERVATION + CLAIM only. It carries NO verificationResult,
+ * NO verificationConfidence, NO LLM conclusion, and NO adjudication handle — the board never
+ * mutates world state and never exposes a verdict. Freshness never gates claimedStatus.
+ */
+export interface StatusBoardRow {
+  employeeId: string;
+  employeeName: string;
+  claimedStatus: string | null;
+  lastEventAt: string | null;
+  secondsSinceLastEvent: number | null;
+}
+
+/** GET /employee-status/board response. Manager-only, read-only; whole-roster snapshot. */
+export interface StatusBoardView {
+  rows: StatusBoardRow[];
+}

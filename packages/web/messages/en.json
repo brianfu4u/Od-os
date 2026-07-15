@@ -443,5 +443,42 @@
       "equipment": "Equipment",
       "other": "Other"
     }
+  },
+  "attention": {
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…",
+    "status": {
+      "on_duty": "On duty",
+      "busy": "Busy",
+      "idle": "Idle",
+      "rest": "Rest",
+      "off_duty": "Off duty"
+    },
+    "kind": {
+      "silence": "Silent too long",
+      "status_inconsistency": "Status vs activity mismatch",
+      "scan_no_followup": "Scan without follow-up",
+      "low_confidence": "Consistency in doubt"
+    },
+    "evidence": {
+      "who": "Employee",
+      "when": "Last event",
+      "claimed": "Claimed status",
+      "submitted": "Submitted",
+      "systemObserved": "System observed"
+    },
+    "board": {
+      "title": "Roster status board",
+      "subtitle": "Claimed status + freshness (read-only, no verdict)",
+      "empty": "No staff in roster",
+      "noClaim": "No claim",
+      "never": "No valid event",
+      "justNow": "just now"
+    },
+    "panel": {
+      "title": "Attention list",
+      "subtitle": "Findings to look at (read-only, not an adjudication surface)",
+      "empty": "Nothing needs attention"
+    }
   }
 }

@@ -9,6 +9,7 @@
  */
 import type {
   ActionLogRecord,
+  AttentionQueueView,
   AssignmentOverview,
   AssignmentResult,
   CreateTaskInput,
@@ -25,6 +26,7 @@ import type {
   ScanResolveResult,
   StaffReportInput,
   StaffReportResult,
+  StatusBoardView,
   UploadResult,
   VerificationResult,
   VoiceFeedRecord,
@@ -252,6 +254,24 @@ export function makeApi(auth?: string | ApiAuth) {
      */
     async retryTranscription(objectId: string): Promise<TranscriptionRetryResult> {
       return json(await fetch(`${API_BASE}/transcription/${objectId}/retry`, { method: 'POST', headers: authHeaders() }));
+    },
+
+    /**
+     * T-09 · manager-only READ-ONLY attention queue (GET /attention/queue). Returns findings the
+     * manager may want to look at; NOT a decision surface — there is no accept/dismiss here and the
+     * server never mutates world state from this read. The UI renders it strictly read-only.
+     */
+    async fetchAttentionQueue(signal?: AbortSignal): Promise<AttentionQueueView> {
+      return json(await fetch(`${API_BASE}/attention/queue`, { headers: authHeaders(), signal }));
+    },
+
+    /**
+     * T-09 · D1-A · manager-only READ-ONLY whole-roster status board (GET /employee-status/board).
+     * Combines each staff's CLAIM layer with the read-time freshness OBSERVATION. Carries no verdict
+     * / verification / LLM field, and never a decision handle.
+     */
+    async fetchStatusBoard(signal?: AbortSignal): Promise<StatusBoardView> {
+      return json(await fetch(`${API_BASE}/employee-status/board`, { headers: authHeaders(), signal }));
     },
   };
 }

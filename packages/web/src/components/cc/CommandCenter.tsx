@@ -15,6 +15,8 @@ import { CommsPanel } from './CommsPanel';
 import { TranscriptStream } from './TranscriptStream';
 import { OpsPanel } from './OpsPanel';
 import { AssignPanel } from './AssignPanel';
+import { StatusBoard } from './StatusBoard';
+import { AttentionPanel } from './AttentionPanel';
 
 function useClock(): string {
   const [now, setNow] = useState<Date | null>(null);
@@ -103,6 +105,15 @@ export function CommandCenter() {
             <TranscriptStream items={transcripts} onRetry={retryTranscription} />
             <OpsPanel />
           </div>
+        </div>
+
+        {/* Manager status board + attention list (T-09). READ-ONLY, manager-only, server-enforced.
+            Deliberately kept in a SEPARATE section from AssignPanel: the board/attention surfaces show
+            claim + freshness + neutral findings for the manager to LOOK AT — they carry NO three-state
+            verdict control. Adjudication lives ONLY in AssignPanel below. */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <StatusBoard />
+          <AttentionPanel />
         </div>
 
         {/* Manager task assignment (manager-only write path; server-enforced) */}
