@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import type { EmployeeStatus, EmployeeStatusView } from '@clearview/shared';
+import type { EmployeeStatus, EmployeeStatusView, StatusBoardView } from '@clearview/shared';
 import { RealtimeService } from '../objects/realtime.service';
 import { EmployeeStatusRepository, NoStaffIdentityError } from './employee-status.repository';
 import type { SessionIdentity } from '../auth/session.types';
@@ -56,5 +56,14 @@ export class EmployeeStatusService {
       }
       throw err;
     }
+  }
+
+  /**
+   * MANAGER-side whole-roster status board (T-09 · D1-A). Pure read: no write, no event, no world-state
+   * mutation. Returns the CLAIM layer + read-time freshness OBSERVATION for every in-roster Staff.
+   */
+  async board(tenantId: string): Promise<StatusBoardView> {
+    const rows = await this.repo.statusBoard(tenantId);
+    return { rows };
   }
 }

@@ -373,6 +373,20 @@ export async function runHttpSmoke({
   const staffOnAttn = await fetch(`${base}/attention/queue`, { headers: SH });
   check(staffOnAttn.status === 403, `staff session on manager-only /attention/queue → 403 (got ${staffOnAttn.status})`);
 
+  // ── manager status board (T-09 · D1-A): manager-only, read-only whole-roster snapshot ──
+  log('\nmanager status board (stage 4 · D1-A):');
+  const boardResp = await fetch(`${base}/employee-status/board`, { headers: MH });
+  const boardBody = await boardResp.json().catch(() => ({}));
+  check(boardResp.ok && Array.isArray(boardBody.rows), `GET /employee-status/board (manager) → ok with rows[] (got ${boardResp.status})`);
+  const ALLOWED_BOARD_KEYS = ['claimedStatus', 'employeeId', 'employeeName', 'lastEventAt', 'secondsSinceLastEvent'];
+  const badBoardRow = (boardBody.rows ?? []).find(
+    (r) => JSON.stringify(Object.keys(r).sort()) !== JSON.stringify(ALLOWED_BOARD_KEYS),
+  );
+  check(!badBoardRow, 'board rows expose exactly the whitelisted keys (no verification / LLM / verdict field)');
+  // A staff session must NOT reach the manager-only board (method-level @Roles('manager') override).
+  const staffOnBoard = await fetch(`${base}/employee-status/board`, { headers: SH });
+  check(staffOnBoard.status === 403, `staff session on manager-only /employee-status/board → 403 (got ${staffOnBoard.status})`);
+
   return { passed, failed };
 }
 

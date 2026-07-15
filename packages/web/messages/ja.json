@@ -443,5 +443,42 @@
       "equipment": "設備",
       "other": "その他"
     }
+  },
+  "attention": {
+    "refresh": "更新",
+    "refreshing": "更新中…",
+    "status": {
+      "on_duty": "勤務中",
+      "busy": "取り込み中",
+      "idle": "待機",
+      "rest": "休憩",
+      "off_duty": "退勤"
+    },
+    "kind": {
+      "silence": "長時間動きなし",
+      "status_inconsistency": "状態と活動の不一致",
+      "scan_no_followup": "スキャン後の対応なし",
+      "low_confidence": "整合性に疑い"
+    },
+    "evidence": {
+      "who": "従業員",
+      "when": "直近イベント",
+      "claimed": "状態申告",
+      "submitted": "提出済み",
+      "systemObserved": "システム観測"
+    },
+    "board": {
+      "title": "全員ステータスボード",
+      "subtitle": "状態申告＋鮮度（閲覧のみ・判定なし）",
+      "empty": "在籍従業員がいません",
+      "noClaim": "未申告",
+      "never": "有効イベントなし",
+      "justNow": "たった今"
+    },
+    "panel": {
+      "title": "注目リスト",
+      "subtitle": "参考用の注目リスト（閲覧のみ・裁定の入口ではない）",
+      "empty": "注目すべき項目はありません"
+    }
   }
 }

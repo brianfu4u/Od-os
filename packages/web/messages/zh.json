@@ -443,5 +443,42 @@
       "equipment": "设备",
       "other": "其它"
     }
+  },
+  "attention": {
+    "refresh": "刷新",
+    "refreshing": "刷新中…",
+    "status": {
+      "on_duty": "在岗",
+      "busy": "忙碌",
+      "idle": "空闲",
+      "rest": "休息",
+      "off_duty": "离岗"
+    },
+    "kind": {
+      "silence": "长时间无动作",
+      "status_inconsistency": "状态与活动不一致",
+      "scan_no_followup": "扫码后无跟进",
+      "low_confidence": "一致性存疑"
+    },
+    "evidence": {
+      "who": "员工",
+      "when": "最近事件",
+      "claimed": "状态声明",
+      "submitted": "已提交",
+      "systemObserved": "系统观察"
+    },
+    "board": {
+      "title": "全员状态看板",
+      "subtitle": "状态声明 + 新鲜度（只读，不含任何评判）",
+      "empty": "暂无在册员工",
+      "noClaim": "未声明",
+      "never": "无有效事件",
+      "justNow": "刚刚"
+    },
+    "panel": {
+      "title": "关注提示区",
+      "subtitle": "供参考的待关注列表（只读，非裁决入口）",
+      "empty": "当前无需关注项"
+    }
   }
 }

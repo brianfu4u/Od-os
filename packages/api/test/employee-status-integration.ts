@@ -102,6 +102,41 @@ async function main(): Promise<void> {
     let threwCrossTenant = false;
     try { await repo.currentForCaller(A, ident(A, SB)); } catch (e) { threwCrossTenant = e instanceof NoStaffIdentityError; }
     check(threwCrossTenant, "isolation: tenant A cannot resolve tenant B's staff (RLS) → NoStaffIdentityError");
+
+    // ── T-09 · D1-A: manager whole-roster status board (read-only projection) ──
+    // Add a second, NEVER-claimed staff so the board must include "normal" employees too, not only
+    // those who ever claimed / surfaced in the attention queue.
+    const SA2 = await insObject(admin, A, 'Staff', { displayName: 'A · Front', staffHandle: 'a_front' });
+
+    const boardBefore = await repo.statusBoard(A);
+    check(boardBefore.length === 2, 'board: returns EVERY in-roster staff (incl. the never-claimed one)');
+    const idsA = boardBefore.map((r) => r.employeeId).sort();
+    check(idsA.includes(SA) && idsA.includes(SA2), 'board: whole roster present (claimed + never-claimed)');
+    check(!idsA.includes(SB), 'board: tenant A board never contains tenant B staff (RLS isolation)');
+
+    const rowSA = boardBefore.find((r) => r.employeeId === SA)!;
+    check(rowSA.claimedStatus === 'idle', 'board: reflects the CLAIM layer (SA last claimed idle via handle)');
+    check(rowSA.employeeName === 'A · Tech', 'board: employeeName from displayName');
+    const rowSA2 = boardBefore.find((r) => r.employeeId === SA2)!;
+    check(rowSA2.claimedStatus === null, 'board: a never-claimed staff shows null claimedStatus (never blocked/hidden)');
+
+    // freshness OBSERVATION is read-time: SA has a valid event (its claims) so secondsSinceLastEvent is
+    // a non-negative number; SA2 has no valid event yet so it is null ("stale").
+    check(typeof rowSA.secondsSinceLastEvent === 'number' && rowSA.secondsSinceLastEvent! >= 0, 'board: freshness computed read-time for an active staff');
+    check(rowSA2.secondsSinceLastEvent === null && rowSA2.lastEventAt === null, 'board: null freshness for a staff with no valid event yet');
+
+    // field-projection guarantee: the board row exposes ONLY claim + observation, never a verdict.
+    const BOARD_KEYS = Object.keys(rowSA).sort();
+    const BOARD_ALLOWED = ['claimedStatus', 'employeeId', 'employeeName', 'lastEventAt', 'secondsSinceLastEvent'].sort();
+    check(JSON.stringify(BOARD_KEYS) === JSON.stringify(BOARD_ALLOWED), `board: row keys are exactly ${BOARD_ALLOWED.join(',')} (no verification/LLM leak)`);
+    check(!('verificationResult' in rowSA) && !('verificationConfidence' in rowSA), 'board: no verification_result / verification_confidence key present');
+
+    // read-only guarantee: calling the board twice writes NO event (unlike the attention queue's audit).
+    const evBefore = await admin.query<{ n: string }>(`SELECT count(*)::text AS n FROM events WHERE tenant_id = $1`, [A]);
+    await repo.statusBoard(A);
+    await repo.statusBoard(A);
+    const evAfter = await admin.query<{ n: string }>(`SELECT count(*)::text AS n FROM events WHERE tenant_id = $1`, [A]);
+    check(evBefore.rows[0]!.n === evAfter.rows[0]!.n, 'board: read-only — two reads append ZERO events (no world-state / audit side-effect)');
   } finally {
     await admin.end();
     await closePool();
