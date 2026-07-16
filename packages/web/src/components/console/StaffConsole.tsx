@@ -7,21 +7,12 @@ import { makeApi, type Api } from '../../lib/api';
 import { hhmm, pct } from '../../lib/format';
 import { DEV_TENANTS, IS_STAGING } from '../../lib/config';
 import { LocaleSwitcher } from '../LocaleSwitcher';
-import { safeStorage } from '../../lib/safe-storage';
 import { CameraScanner } from './CameraScanner';
 import { AudioRecorder } from './AudioRecorder';
 import { MyTasks } from './MyTasks';
 import { EmployeeStatusBar } from './EmployeeStatusBar';
 import { ScanEntry } from './ScanEntry';
-import {
-  clearStaffToken,
-  fetchMe,
-  loadStaffToken,
-  saveStaffToken,
-  staffDevLogin,
-  staffStagingLogin,
-  type Session,
-} from '../../lib/session';
+import { fetchMe, serverLogout, staffDevLogin, staffStagingLogin, type Session } from '../../lib/session';
 
 interface ObjRow {
   id: string;
@@ -85,21 +76,17 @@ export function StaffConsole() {
   const [tenantId, setTenantId] = useState(DEV_TENANTS[0]!.id);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const storageAvailable = useMemo(() => safeStorage.isAvailable(), []);
+  // Cookie auth no longer depends on JS storage.
+  const storageAvailable = true;
 
   const api: Api | null = useMemo(() => (session ? makeApi({ token: session.token }) : null), [session]);
 
+  // Rehydrate the staff session from the HttpOnly cookie (a manager cookie is ignored here).
   useEffect(() => {
-    const token = loadStaffToken();
-    if (!token) {
-      setReady(true);
-      return;
-    }
     let cancelled = false;
-    void fetchMe(token).then((identity) => {
+    void fetchMe().then((identity) => {
       if (cancelled) return;
-      if (identity && identity.subject !== 'manager') setSession({ token, identity });
-      else clearStaffToken();
+      if (identity && identity.subject !== 'manager') setSession({ token: '', identity });
       setReady(true);
     });
     return () => {
@@ -115,7 +102,6 @@ export function StaffConsole() {
       const handle = name.trim().toLowerCase().replace(/\s+/g, '_') || 'staff';
       const display = name.trim() || undefined;
       const s = IS_STAGING ? await staffStagingLogin(password, handle, display) : await staffDevLogin(tenantId, handle, display);
-      saveStaffToken(s.token);
       setSession(s);
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : String(err));
@@ -124,8 +110,8 @@ export function StaffConsole() {
     }
   }
   function signOut(): void {
-    clearStaffToken();
     setSession(null);
+    void serverLogout();
   }
 
   // ── terminal state (after login) ──

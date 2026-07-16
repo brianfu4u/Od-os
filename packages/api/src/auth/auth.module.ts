@@ -3,6 +3,8 @@ import { AuthController } from './auth.controller';
 import { SessionService } from './session.service';
 import { SessionStore } from './session.store';
 import { ManagerSeedService } from './manager-seed.service';
+import { SseTicketService } from './sse-ticket.service';
+import { LoginThrottleService } from './login-throttle.service';
 import { TenantGuard } from '../tenant/tenant.guard';
 
 /**
@@ -16,7 +18,7 @@ import { TenantGuard } from '../tenant/tenant.guard';
 @Global()
 @Module({
   controllers: [AuthController],
-  providers: [SessionStore, SessionService, ManagerSeedService, TenantGuard],
-  exports: [SessionStore, SessionService, TenantGuard],
+  providers: [SessionStore, SessionService, ManagerSeedService, SseTicketService, LoginThrottleService, TenantGuard],
+  exports: [SessionStore, SessionService, SseTicketService, TenantGuard],
 })
 export class AuthModule {}

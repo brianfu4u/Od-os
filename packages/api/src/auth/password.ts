@@ -18,7 +18,20 @@
  *    OPTIONAL by design (mirrors P5.1's optional DATABASE_CA_CERT): unset ⇒ the plain password goes
  *    into scrypt, so the feature works out of the box and the pepper can be introduced later.
  */
-import { scryptSync, randomBytes, timingSafeEqual, createHmac } from 'node:crypto';
+import { scrypt as scryptCb, randomBytes, timingSafeEqual, createHmac, type ScryptOptions } from 'node:crypto';
+
+/**
+ * ASYNC scrypt (P0-2 sub-issue 4). The synchronous `scryptSync` blocks the single Node event loop
+ * for the full KDF cost (tens of ms at N=16384) on EVERY login, so a burst of logins serializes and
+ * stalls all other requests. `crypto.scrypt` runs on libuv's threadpool, so the derivation happens
+ * off the main thread and concurrent requests keep flowing. Same algorithm/params — only the
+ * scheduling changes.
+ */
+function scrypt(password: string | Buffer, salt: string | Buffer, keylen: number, options: ScryptOptions): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scryptCb(password, salt, keylen, options, (err, derivedKey) => (err ? reject(err) : resolve(derivedKey)));
+  });
+}
 
 type Env = Record<string, string | undefined>;
 
@@ -40,21 +53,25 @@ export function applyPepper(plain: string, env: Env = process.env): string {
   return createHmac('sha256', pepper).update(plain, 'utf8').digest('hex');
 }
 
-/** Hash a plaintext password into a self-describing `scrypt$N$r$p$salt$hash` string. */
-export function hashPassword(plain: string, env: Env = process.env): string {
+/** Hash a plaintext password into a self-describing `scrypt$N$r$p$salt$hash` string (async). */
+export async function hashPassword(plain: string, env: Env = process.env): Promise<string> {
   if (typeof plain !== 'string' || plain.length === 0) {
     throw new Error('hashPassword: password must be a non-empty string');
   }
   const salt = randomBytes(SALT_BYTES);
-  const derived = scryptSync(applyPepper(plain, env), salt, KEYLEN, { N, r: R, p: P, maxmem: MAXMEM });
+  const derived = await scrypt(applyPepper(plain, env), salt, KEYLEN, { N, r: R, p: P, maxmem: MAXMEM });
   return [SCHEME, N, R, P, salt.toString('base64'), derived.toString('base64')].join('$');
 }
 
 /**
- * Verify a plaintext password against an encoded hash, in constant time.
- * Returns false for any malformed/empty input or scheme mismatch — never throws, never logs.
+ * Verify a plaintext password against an encoded hash, in constant time (async).
+ * Resolves false for any malformed/empty input or scheme mismatch — never throws, never logs.
  */
-export function verifyPassword(plain: string, encoded: string | null | undefined, env: Env = process.env): boolean {
+export async function verifyPassword(
+  plain: string,
+  encoded: string | null | undefined,
+  env: Env = process.env,
+): Promise<boolean> {
   if (typeof plain !== 'string' || plain.length === 0) return false;
   if (typeof encoded !== 'string' || encoded.length === 0) return false;
 
@@ -80,7 +97,7 @@ export function verifyPassword(plain: string, encoded: string | null | undefined
 
   let derived: Buffer;
   try {
-    derived = scryptSync(applyPepper(plain, env), salt, expected.length, { N: n, r, p, maxmem: MAXMEM });
+    derived = await scrypt(applyPepper(plain, env), salt, expected.length, { N: n, r, p, maxmem: MAXMEM });
   } catch {
     return false;
   }
@@ -91,6 +108,11 @@ export function verifyPassword(plain: string, encoded: string | null | undefined
 /**
  * A fixed, well-formed hash used for a constant-time DUMMY verify when a login is unknown or has no
  * credential set — so the "no such manager" path spends ~the same time as a real verify, denying an
- * attacker a timing oracle for enumerating valid logins. Computed once at module load.
+ * attacker a timing oracle for enumerating valid logins. Computed lazily once (async hashing can no
+ * longer run at module load) and memoized.
  */
-export const DUMMY_PASSWORD_HASH = hashPassword('clearview-od::dummy::not-a-real-credential');
+let dummyHashPromise: Promise<string> | null = null;
+export function getDummyPasswordHash(): Promise<string> {
+  if (!dummyHashPromise) dummyHashPromise = hashPassword('clearview-od::dummy::not-a-real-credential');
+  return dummyHashPromise;
+}

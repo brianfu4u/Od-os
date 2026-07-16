@@ -1,6 +1,24 @@
 import { Injectable } from '@nestjs/common';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { getPool } from '../database/pool';
 import type { ManagerIdentityRow, SessionRow, StaffIdentityRow } from './session.types';
+
+/**
+ * P0-2 sub-issue 1: the `sessions` table stores ONLY a SHA-256 hash of the opaque token, never the
+ * raw token. A DB leak therefore yields hashes, not live bearer credentials. SHA-256 (not scrypt) is
+ * correct here: the token is a 256-bit CSPRNG value with full entropy, so it is not brute-forceable
+ * and needs no slow KDF — a fast one-way hash is enough and keeps lookups a single indexed equality.
+ */
+export function hashToken(token: string): string {
+  return createHash('sha256').update(token, 'utf8').digest('hex');
+}
+
+/** Constant-time compare of two hex hashes of equal length (guards the final match, defense-in-depth). */
+function hashesEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a, 'utf8');
+  const bb = Buffer.from(b, 'utf8');
+  return ab.length === bb.length && timingSafeEqual(ab, bb);
+}
 
 /**
  * Raw data access for the NON-tenant auth tables (sessions, staff_identities, manager_identities).
@@ -25,25 +43,32 @@ export class SessionStore {
     const c = await getPool().connect();
     try {
       await c.query(
-        `INSERT INTO sessions (token, subject, tenant_id, staff_id, manager_id, role, expires_at)
+        `INSERT INTO sessions (token_hash, subject, tenant_id, staff_id, manager_id, role, expires_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [row.token, row.subject, row.tenantId, row.staffId ?? null, row.managerId ?? null, row.role ?? null, row.expiresAt.toISOString()],
+        [hashToken(row.token), row.subject, row.tenantId, row.staffId ?? null, row.managerId ?? null, row.role ?? null, row.expiresAt.toISOString()],
       );
     } finally {
       c.release();
     }
   }
 
-  /** Returns the session only if it exists AND is unexpired. */
+  /**
+   * Returns the session only if it exists AND is unexpired. The caller passes the RAW token; we hash
+   * it and look it up by hash (the raw token is never stored). A final constant-time hash compare
+   * guards the match.
+   */
   async getValidSession(token: string): Promise<SessionRow | null> {
+    const tokenHash = hashToken(token);
     const c = await getPool().connect();
     try {
       const res = await c.query<SessionRow>(
-        `SELECT token, subject, tenant_id, staff_id, manager_id, role, expires_at
-           FROM sessions WHERE token = $1 AND expires_at > now() LIMIT 1`,
-        [token],
+        `SELECT token_hash, subject, tenant_id, staff_id, manager_id, role, expires_at
+           FROM sessions WHERE token_hash = $1 AND expires_at > now() LIMIT 1`,
+        [tokenHash],
       );
-      return res.rows[0] ?? null;
+      const row = res.rows[0];
+      if (!row || !hashesEqual(row.token_hash, tokenHash)) return null;
+      return row;
     } finally {
       c.release();
     }
@@ -52,7 +77,7 @@ export class SessionStore {
   async deleteSession(token: string): Promise<void> {
     const c = await getPool().connect();
     try {
-      await c.query(`DELETE FROM sessions WHERE token = $1`, [token]);
+      await c.query(`DELETE FROM sessions WHERE token_hash = $1`, [hashToken(token)]);
     } finally {
       c.release();
     }

@@ -3,17 +3,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { makeApi, type Api } from '../../lib/api';
 import {
-  clearToken,
   fetchMe,
-  loadToken,
   managerDevLogin,
   managerLogin,
   managerStagingLogin,
-  saveToken,
   serverLogout,
   type Session,
 } from '../../lib/session';
-import { safeStorage } from '../../lib/safe-storage';
 
 interface SessionContextValue {
   session: Session | null;
@@ -33,21 +29,15 @@ const SessionContext = createContext<SessionContextValue | null>(null);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
-  const [storageAvailable, setStorageAvailable] = useState(true);
+  // Cookie auth no longer depends on JS storage, so storage is never a blocker for sign-in.
+  const storageAvailable = true;
 
-  // Hydrate a stored token on mount and validate it via /auth/me (client-only → static prerender safe).
+  // Rehydrate the session from the HttpOnly cookie via /auth/me (client-only → static prerender safe).
   useEffect(() => {
-    setStorageAvailable(safeStorage.isAvailable());
-    const token = loadToken();
-    if (!token) {
-      setReady(true);
-      return;
-    }
     let cancelled = false;
-    void fetchMe(token).then((identity) => {
+    void fetchMe().then((identity) => {
       if (cancelled) return;
-      if (identity) setSession({ token, identity });
-      else clearToken();
+      if (identity) setSession({ token: '', identity });
       setReady(true);
     });
     return () => {
@@ -56,29 +46,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (tenantId: string, loginName: string, displayName?: string) => {
-    const s = await managerDevLogin(tenantId, loginName, displayName);
-    saveToken(s.token);
-    setSession(s);
+    setSession(await managerDevLogin(tenantId, loginName, displayName));
   }, []);
 
   const stagingLogin = useCallback(async (password: string) => {
-    const s = await managerStagingLogin(password);
-    saveToken(s.token);
-    setSession(s);
+    setSession(await managerStagingLogin(password));
   }, []);
 
   const credentialLogin = useCallback(async (loginId: string, password: string) => {
-    const s = await managerLogin(loginId, password);
-    saveToken(s.token);
-    setSession(s);
+    setSession(await managerLogin(loginId, password));
   }, []);
 
   const logout = useCallback(async () => {
-    const current = session;
     setSession(null);
-    clearToken();
-    if (current) await serverLogout(current.token);
-  }, [session]);
+    await serverLogout();
+  }, []);
 
   const value = useMemo<SessionContextValue>(
     () => ({ session, ready, storageAvailable, login, stagingLogin, credentialLogin, logout }),

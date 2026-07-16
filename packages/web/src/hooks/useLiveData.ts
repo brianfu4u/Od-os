@@ -43,7 +43,7 @@ export interface LiveData {
 /**
  * Wires the command center to the LIVE API using the manager SESSION token: initial load of the
  * overview aggregate + open recommendations + the scoped voice-transcript feed, an EventSource on
- * /objects/stream (?session=) that debounces a refetch on every change and AUTO-RECONNECTS with
+ * /objects/stream (?ticket=) that debounces a refetch on every change and AUTO-RECONNECTS with
  * capped backoff, and approve/undo/dismiss/snooze + transcription retry. Because the SSE refetch
  * reloads the transcript feed too, a transcript.completed/failed write (which changes the voice
  * Document) flows into the UI live. The voice feed uses the scoped /transcription/feed endpoint, so
@@ -102,7 +102,8 @@ export function useLiveData(token: string): LiveData {
   }, [load]);
 
   // SSE with auto-reconnect (capped exponential backoff). On (re)connect we reload so a gap while
-  // offline is reconciled. EventSource can't set headers, so the session travels as ?session=.
+  // offline is reconciled. EventSource can't set headers or read the HttpOnly cookie cross-site, so
+  // each (re)connect first mints a short-lived single-use ticket and passes it as ?ticket=.
   useEffect(() => {
     if (typeof window === 'undefined' || typeof EventSource === 'undefined') return;
     let es: EventSource | null = null;
@@ -110,8 +111,26 @@ export function useLiveData(token: string): LiveData {
     let attempt = 0;
     let closed = false;
 
-    const connect = (): void => {
-      es = new EventSource(api.streamUrl());
+    const scheduleReconnect = (): void => {
+      if (closed) return;
+      attempt += 1;
+      const delay = Math.min(1000 * 2 ** (attempt - 1), 15000);
+      retry = setTimeout(() => void connect(), delay);
+    };
+
+    const connect = async (): Promise<void> => {
+      let ticket: string;
+      try {
+        ticket = await api.sseTicket();
+      } catch {
+        // Couldn't mint a ticket (e.g. not authenticated yet) — back off and retry. Data
+        // availability is still governed by load(), so this never flips the offline banner.
+        setStreaming('reconnecting');
+        scheduleReconnect();
+        return;
+      }
+      if (closed) return;
+      es = new EventSource(api.streamUrl(ticket), { withCredentials: true });
       es.onopen = () => {
         attempt = 0;
         setStreaming('open');
@@ -128,13 +147,10 @@ export function useLiveData(token: string): LiveData {
         // what stops the banner from flickering on every reconnect attempt.
         setStreaming('reconnecting');
         es?.close();
-        if (closed) return;
-        attempt += 1;
-        const delay = Math.min(1000 * 2 ** (attempt - 1), 15000);
-        retry = setTimeout(connect, delay);
+        scheduleReconnect();
       };
     };
-    connect();
+    void connect();
 
     return () => {
       closed = true;

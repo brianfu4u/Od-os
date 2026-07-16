@@ -1,11 +1,13 @@
 /**
  * Typed browser client for the Clearview OD API.
  *
- * Auth (P3): the command center signs in via a P1 manager session and sends the token as
- * `Authorization: Bearer` (and `?session=` for SSE, which can't set headers) — the SESSION drives
- * the tenant, so nothing here self-reports a tenant. A dev fallback (`{ tenantId }`, or a bare
- * tenantId string) still sends the non-production `X-Tenant-Id` shim so the staff-console harness
- * keeps working locally; production ignores it.
+ * Auth (P0-2): the session TOKEN is delivered as an HttpOnly cookie set by the API on login; the
+ * browser sends it automatically on every request via `credentials: 'include'` (see `cfetch`). The
+ * client no longer reads a token from JS storage nor sends `Authorization: Bearer`, so an XSS cannot
+ * exfiltrate the session. SSE can't set headers OR read the HttpOnly cookie cross-site, so it uses a
+ * short-lived single-use `?ticket=` (see `sseTicket`/`streamUrl`) instead of the old `?session=`
+ * URL token. A dev fallback (`{ tenantId }`, or a bare tenantId string) still sends the
+ * non-production `X-Tenant-Id` shim so the staff-console harness keeps working locally; prod ignores it.
  */
 import type {
   ActionLogRecord,
@@ -65,6 +67,15 @@ function normalize(auth?: string | ApiAuth): ApiAuth {
   return auth;
 }
 
+/**
+ * All API calls go through this wrapper so the HttpOnly session cookie is sent on every request
+ * (including cross-site Vercel→Render, which requires the cookie to be `SameSite=None; Secure`).
+ * Without `credentials: 'include'` the browser would omit the cookie and the request would 401.
+ */
+function cfetch(input: string, init?: RequestInit): Promise<Response> {
+  return fetch(input, { ...init, credentials: 'include' });
+}
+
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let detail = res.statusText;
@@ -81,8 +92,9 @@ async function json<T>(res: Response): Promise<T> {
 
 export function makeApi(auth?: string | ApiAuth) {
   const a = normalize(auth);
+  // Auth is the HttpOnly cookie (sent by cfetch). We only ever add the non-prod X-Tenant-Id dev
+  // shim when there is NO real session; a logged-in session carries no client-supplied tenant.
   const authHeaders = (extra?: Record<string, string>): Record<string, string> => ({
-    ...(a.token ? { Authorization: `Bearer ${a.token}` } : {}),
     ...(!a.token && a.tenantId ? { 'X-Tenant-Id': a.tenantId } : {}),
     ...(extra ?? {}),
   });
@@ -91,56 +103,64 @@ export function makeApi(auth?: string | ApiAuth) {
     auth: a,
     base: API_BASE,
 
-    /** SSE endpoint — EventSource carries the session (or dev tenant) as a query param. */
-    streamUrl(): string {
-      const q = a.token
-        ? `session=${encodeURIComponent(a.token)}`
-        : `tenantId=${encodeURIComponent(a.tenantId ?? DEV_TENANT_ID)}`;
-      return `${API_BASE}/objects/stream?${q}`;
+    /**
+     * P0-2 sub-issue 3: mint a short-lived single-use SSE ticket (authenticated by the cookie). The
+     * ticket — not the session token — is what travels in the SSE URL.
+     */
+    async sseTicket(): Promise<string> {
+      const { ticket } = await json<{ ticket: string }>(
+        await cfetch(`${API_BASE}/auth/sse-ticket`, { method: 'POST', headers: authHeaders() }),
+      );
+      return ticket;
+    },
+
+    /** SSE endpoint — EventSource carries a single-use ticket (never the raw session token). */
+    streamUrl(ticket: string): string {
+      return `${API_BASE}/objects/stream?ticket=${encodeURIComponent(ticket)}`;
     },
 
     async overview(signal?: AbortSignal): Promise<OverviewResult> {
-      return json(await fetch(`${API_BASE}/overview`, { headers: authHeaders(), signal }));
+      return json(await cfetch(`${API_BASE}/overview`, { headers: authHeaders(), signal }));
     },
 
     async recommendations(status: RecommendationStatus = 'open', signal?: AbortSignal): Promise<RecommendationRecord[]> {
       return json(
-        await fetch(`${API_BASE}/recommendations?status=${status}&limit=50`, { headers: authHeaders(), signal }),
+        await cfetch(`${API_BASE}/recommendations?status=${status}&limit=50`, { headers: authHeaders(), signal }),
       );
     },
 
     async tempo(signal?: AbortSignal): Promise<OperatingTempo> {
-      return json(await fetch(`${API_BASE}/recommendations/tempo`, { headers: authHeaders(), signal }));
+      return json(await cfetch(`${API_BASE}/recommendations/tempo`, { headers: authHeaders(), signal }));
     },
 
     /** Approve → runs the P2/S4 write-back layer; returns the updated record incl. execution state. */
     async approve(id: string): Promise<RecommendationRecord> {
-      return json(await fetch(`${API_BASE}/recommendations/${id}/approve`, { method: 'POST', headers: authHeaders() }));
+      return json(await cfetch(`${API_BASE}/recommendations/${id}/approve`, { method: 'POST', headers: authHeaders() }));
     },
 
     /** Undo a previously executed write-back and reopen the cue. */
     async undo(id: string): Promise<RecommendationRecord> {
-      return json(await fetch(`${API_BASE}/recommendations/${id}/undo`, { method: 'POST', headers: authHeaders() }));
+      return json(await cfetch(`${API_BASE}/recommendations/${id}/undo`, { method: 'POST', headers: authHeaders() }));
     },
 
     async act(id: string, action: 'dismiss' | 'snooze'): Promise<RecommendationRecord> {
-      return json(await fetch(`${API_BASE}/recommendations/${id}/${action}`, { method: 'POST', headers: authHeaders() }));
+      return json(await cfetch(`${API_BASE}/recommendations/${id}/${action}`, { method: 'POST', headers: authHeaders() }));
     },
 
     /** The append-only action_log for a cue (what its approval did). */
     async actionLog(id: string, signal?: AbortSignal): Promise<ActionLogRecord[]> {
-      return json(await fetch(`${API_BASE}/recommendations/${id}/actions`, { headers: authHeaders(), signal }));
+      return json(await cfetch(`${API_BASE}/recommendations/${id}/actions`, { headers: authHeaders(), signal }));
     },
 
     /** Run the six-domain recommendation sweep (advise-only) — lights up every domain's cues. */
     async sweep(): Promise<{ created: number; ids: string[] }> {
-      return json(await fetch(`${API_BASE}/recommendations/sweep`, { method: 'POST', headers: authHeaders() }));
+      return json(await cfetch(`${API_BASE}/recommendations/sweep`, { method: 'POST', headers: authHeaders() }));
     },
 
     /** List objects of a type. Returns the ontology shape the API maps (camelCase state triplet). */
     async objects(type?: string, signal?: AbortSignal): Promise<OntologyObject[]> {
       const q = type ? `?type=${encodeURIComponent(type)}` : '';
-      return json(await fetch(`${API_BASE}/objects${q}`, { headers: authHeaders(), signal }));
+      return json(await cfetch(`${API_BASE}/objects${q}`, { headers: authHeaders(), signal }));
     },
 
     /**
@@ -149,7 +169,7 @@ export function makeApi(auth?: string | ApiAuth) {
      */
     async resolveScan(code: string, signal?: AbortSignal): Promise<{ resolved: ScanResolveResult | null }> {
       return json(
-        await fetch(`${API_BASE}/objects/resolve?code=${encodeURIComponent(code)}`, { headers: authHeaders(), signal }),
+        await cfetch(`${API_BASE}/objects/resolve?code=${encodeURIComponent(code)}`, { headers: authHeaders(), signal }),
       );
     },
 
@@ -162,7 +182,7 @@ export function makeApi(auth?: string | ApiAuth) {
      */
     async submitStatusClaim(input: SubmitStatusClaimInput): Promise<EmployeeStatusView> {
       return json(
-        await fetch(`${API_BASE}/employee-status/claims`, {
+        await cfetch(`${API_BASE}/employee-status/claims`, {
           method: 'POST',
           headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify(input),
@@ -179,7 +199,7 @@ export function makeApi(auth?: string | ApiAuth) {
      */
     async submitScan(input: SubmitScanInput): Promise<ScanAck> {
       return json(
-        await fetch(`${API_BASE}/scans`, {
+        await cfetch(`${API_BASE}/scans`, {
           method: 'POST',
           headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify(input),
@@ -192,7 +212,7 @@ export function makeApi(auth?: string | ApiAuth) {
      * Returns `EmployeeStatusView` — claimedStatus / note / claimedAt, never any verification field.
      */
     async employeeStatusMe(signal?: AbortSignal): Promise<EmployeeStatusView> {
-      return json(await fetch(`${API_BASE}/employee-status/me`, { headers: authHeaders(), signal }));
+      return json(await cfetch(`${API_BASE}/employee-status/me`, { headers: authHeaders(), signal }));
     },
 
     /**
@@ -200,12 +220,12 @@ export function makeApi(auth?: string | ApiAuth) {
      * resolves the caller's staff from the session; nothing here self-reports a staff id.
      */
     async myTasks(signal?: AbortSignal): Promise<MyTaskSummary[]> {
-      return json(await fetch(`${API_BASE}/tasks/mine`, { headers: authHeaders(), signal }));
+      return json(await cfetch(`${API_BASE}/tasks/mine`, { headers: authHeaders(), signal }));
     },
 
     /** P3 drill-down: an object's full story (object + events + verification ledger). */
     async timeline(objectId: string, signal?: AbortSignal): Promise<ObjectTimeline> {
-      return json(await fetch(`${API_BASE}/objects/${objectId}/timeline`, { headers: authHeaders(), signal }));
+      return json(await cfetch(`${API_BASE}/objects/${objectId}/timeline`, { headers: authHeaders(), signal }));
     },
 
     /**
@@ -215,7 +235,7 @@ export function makeApi(auth?: string | ApiAuth) {
      */
     async transcripts(limit?: number, signal?: AbortSignal): Promise<VoiceFeedRecord[]> {
       const q = limit ? `?limit=${encodeURIComponent(String(limit))}` : '';
-      return json(await fetch(`${API_BASE}/transcription/feed${q}`, { headers: authHeaders(), signal }));
+      return json(await cfetch(`${API_BASE}/transcription/feed${q}`, { headers: authHeaders(), signal }));
     },
 
     /**
@@ -223,7 +243,7 @@ export function makeApi(auth?: string | ApiAuth) {
      * metrics + recent errors + tenant-scoped activity counts). Server enforces manager via RolesGuard.
      */
     async opsSummary(signal?: AbortSignal): Promise<OpsSummary> {
-      return json(await fetch(`${API_BASE}/ops/summary`, { headers: authHeaders(), signal }));
+      return json(await cfetch(`${API_BASE}/ops/summary`, { headers: authHeaders(), signal }));
     },
 
     /**
@@ -231,13 +251,13 @@ export function makeApi(auth?: string | ApiAuth) {
      * they can be assigned to. Server enforces manager via RolesGuard + scopes by RLS.
      */
     async assignmentOverview(signal?: AbortSignal): Promise<AssignmentOverview> {
-      return json(await fetch(`${API_BASE}/assignments/overview`, { headers: authHeaders(), signal }));
+      return json(await cfetch(`${API_BASE}/assignments/overview`, { headers: authHeaders(), signal }));
     },
 
     /** Assign/reassign a task to a staff member in this tenant (manager-only). */
     async assignTask(taskId: string, staffId: string): Promise<AssignmentResult> {
       return json(
-        await fetch(`${API_BASE}/assignments/assign`, {
+        await cfetch(`${API_BASE}/assignments/assign`, {
           method: 'POST',
           headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({ taskId, staffId }),
@@ -248,7 +268,7 @@ export function makeApi(auth?: string | ApiAuth) {
     /** Create a task, optionally assigning it immediately (manager-only). Never writes verified_state. */
     async createTask(input: CreateTaskInput): Promise<AssignmentResult> {
       return json(
-        await fetch(`${API_BASE}/assignments/tasks`, {
+        await cfetch(`${API_BASE}/assignments/tasks`, {
           method: 'POST',
           headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify(input),
@@ -263,7 +283,7 @@ export function makeApi(auth?: string | ApiAuth) {
      */
     async decideTask(taskId: string, input: TaskDecisionInput): Promise<TaskDecisionResult> {
       return json(
-        await fetch(`${API_BASE}/assignments/tasks/${taskId}/decide`, {
+        await cfetch(`${API_BASE}/assignments/tasks/${taskId}/decide`, {
           method: 'POST',
           headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify(input),
@@ -275,7 +295,7 @@ export function makeApi(auth?: string | ApiAuth) {
 
     async postReport(input: StaffReportInput): Promise<StaffReportResult> {
       return json(
-        await fetch(`${API_BASE}/reports`, {
+        await cfetch(`${API_BASE}/reports`, {
           method: 'POST',
           headers: authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify(input),
@@ -288,11 +308,11 @@ export function makeApi(auth?: string | ApiAuth) {
       form.append('file', file);
       if (opts?.linkTo) form.append('linkTo', opts.linkTo);
       if (opts?.kind) form.append('kind', opts.kind);
-      return json(await fetch(`${API_BASE}/uploads`, { method: 'POST', headers: authHeaders(), body: form }));
+      return json(await cfetch(`${API_BASE}/uploads`, { method: 'POST', headers: authHeaders(), body: form }));
     },
 
     async verify(objectId: string): Promise<VerificationResult> {
-      return json(await fetch(`${API_BASE}/objects/${objectId}/verify`, { method: 'POST', headers: authHeaders() }));
+      return json(await cfetch(`${API_BASE}/objects/${objectId}/verify`, { method: 'POST', headers: authHeaders() }));
     },
 
     /**
@@ -300,7 +320,7 @@ export function makeApi(auth?: string | ApiAuth) {
      * Tenant-authed via the same session/dev shim; the STT key stays on the backend only.
      */
     async retryTranscription(objectId: string): Promise<TranscriptionRetryResult> {
-      return json(await fetch(`${API_BASE}/transcription/${objectId}/retry`, { method: 'POST', headers: authHeaders() }));
+      return json(await cfetch(`${API_BASE}/transcription/${objectId}/retry`, { method: 'POST', headers: authHeaders() }));
     },
 
     /**
@@ -309,7 +329,7 @@ export function makeApi(auth?: string | ApiAuth) {
      * server never mutates world state from this read. The UI renders it strictly read-only.
      */
     async fetchAttentionQueue(signal?: AbortSignal): Promise<AttentionQueueView> {
-      return json(await fetch(`${API_BASE}/attention/queue`, { headers: authHeaders(), signal }));
+      return json(await cfetch(`${API_BASE}/attention/queue`, { headers: authHeaders(), signal }));
     },
 
     /**
@@ -334,7 +354,7 @@ export function makeApi(auth?: string | ApiAuth) {
      * / verification / LLM field, and never a decision handle.
      */
     async fetchStatusBoard(signal?: AbortSignal): Promise<StatusBoardView> {
-      return json(await fetch(`${API_BASE}/employee-status/board`, { headers: authHeaders(), signal }));
+      return json(await cfetch(`${API_BASE}/employee-status/board`, { headers: authHeaders(), signal }));
     },
   };
 }

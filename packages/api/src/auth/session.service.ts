@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { withTenant } from '../database/tenant-context';
 import { SessionStore } from './session.store';
-import { DUMMY_PASSWORD_HASH, hashPassword, verifyPassword } from './password';
+import { getDummyPasswordHash, hashPassword, verifyPassword } from './password';
 import type { SessionIdentity } from './session.types';
 
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h
@@ -56,10 +56,10 @@ export class SessionService {
   async loginManager(input: { login: string; password: string }): Promise<{ token: string; identity: SessionIdentity }> {
     const idn = await this.store.findManagerIdentity(input.login);
     if (!idn || !idn.password_hash) {
-      verifyPassword(input.password, DUMMY_PASSWORD_HASH); // burn ~equal time, then deny
+      await verifyPassword(input.password, await getDummyPasswordHash()); // burn ~equal time, then deny
       throw new UnauthorizedException('invalid credentials');
     }
-    if (!verifyPassword(input.password, idn.password_hash)) {
+    if (!(await verifyPassword(input.password, idn.password_hash))) {
       throw new UnauthorizedException('invalid credentials');
     }
     return this.issue('manager', { tenantId: idn.tenant_id, managerId: idn.manager_id, role: idn.role });
@@ -138,7 +138,7 @@ export class SessionService {
     }
     const hasCredential = Boolean(existing?.password_hash);
     if (hasCredential && !input.force) return { action: 'skipped', managerId };
-    await this.store.setManagerPassword(input.login, hashPassword(input.password));
+    await this.store.setManagerPassword(input.login, await hashPassword(input.password));
     return { action: existing ? 'updated' : 'created', managerId };
   }
 

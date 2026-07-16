@@ -68,7 +68,7 @@ async function main(): Promise<void> {
     const hash = row.rows[0]?.password_hash ?? '';
     check(hash.startsWith('scrypt$'), 'password stored as a scrypt hash');
     check(!hash.includes(PW), 'stored hash does NOT contain the plaintext password');
-    check(verifyPassword(PW, hash), 'stored hash verifies the correct password');
+    check(await verifyPassword(PW, hash), 'stored hash verifies the correct password');
 
     // 3) Correct login → manager session bound to {tenant, manager, role}.
     const ok = await sessions.loginManager({ login, password: PW });

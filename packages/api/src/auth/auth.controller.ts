@@ -13,6 +13,8 @@ import {
 } from '@nestjs/common';
 import { timingSafeEqual } from 'node:crypto';
 import { SessionService } from './session.service';
+import { SseTicketService } from './sse-ticket.service';
+import { LoginThrottleService } from './login-throttle.service';
 import { code2session, isWeChatConfigured } from './wechat';
 import { isUuid, TenantGuard, extractSessionToken, type TenantRequest } from '../tenant/tenant.guard';
 import { AuthIdentity } from '../tenant/tenant.decorator';
@@ -27,10 +29,25 @@ const COOKIE = 'cv_session';
 function isProd(): boolean {
   return process.env.NODE_ENV === 'production';
 }
+/**
+ * Set the HttpOnly session cookie (P0-2 sub-issue 2 — the token is delivered here, never in a shape
+ * the browser can read from JS/localStorage). In production the frontend (Vercel) and API (Render) are
+ * on DIFFERENT sites, so the cookie must be `SameSite=None; Secure` to be sent on cross-site XHR/SSE;
+ * `HttpOnly` keeps it unreadable to JS (XSS can't exfiltrate it). In dev (same-site localhost, plain
+ * http) we use `SameSite=Lax` and omit `Secure` so it works without TLS.
+ */
 function setSessionCookie(res: HttpResponse, token: string, maxAgeSec: number): void {
-  const parts = [`${COOKIE}=${encodeURIComponent(token)}`, 'HttpOnly', 'Path=/', 'SameSite=Lax', `Max-Age=${maxAgeSec}`];
-  if (isProd()) parts.push('Secure');
+  const parts = [`${COOKIE}=${encodeURIComponent(token)}`, 'HttpOnly', 'Path=/', `Max-Age=${maxAgeSec}`];
+  parts.push(isProd() ? 'SameSite=None' : 'SameSite=Lax');
+  if (isProd()) parts.push('Secure'); // required by browsers whenever SameSite=None
   res.setHeader('Set-Cookie', parts.join('; '));
+}
+
+/** Best-effort client IP for throttling: first X-Forwarded-For hop (Render sets it), else a constant. */
+function clientIp(req: TenantRequest): string {
+  const xff = req.header('x-forwarded-for');
+  if (xff) return xff.split(',')[0]!.trim();
+  return req.header('x-real-ip') ?? 'unknown';
 }
 
 /**
@@ -62,7 +79,11 @@ function assertStagingPassword(password: unknown): string {
  */
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly sessions: SessionService) {}
+  constructor(
+    private readonly sessions: SessionService,
+    private readonly tickets: SseTicketService,
+    private readonly throttle: LoginThrottleService,
+  ) {}
 
   /** PROD staff login. Requires WeChat credentials (founder dependency) — 501 until configured. */
   @Post('staff/wx-login')
@@ -129,13 +150,27 @@ export class AuthController {
    * production sign-in. (The wide-open manager/dev-login below stays 404 in production.)
    */
   @Post('manager/login')
-  async managerLogin(@Body() body: { login?: string; password?: string }, @Res({ passthrough: true }) res: HttpResponse) {
+  async managerLogin(
+    @Body() body: { login?: string; password?: string },
+    @Req() req: TenantRequest,
+    @Res({ passthrough: true }) res: HttpResponse,
+  ) {
     const login = typeof body?.login === 'string' ? body.login.trim() : '';
     const password = typeof body?.password === 'string' ? body.password : '';
     if (!login || !password) throw new BadRequestException('login and password are required');
-    const { token, identity } = await this.sessions.loginManager({ login, password });
-    setSessionCookie(res, token, 12 * 3600);
-    return { token, identity };
+    // Failed-login lockout (P0-2 sub-issue 4b): a locked key is rejected with 429 BEFORE any verify,
+    // so even a correct password is refused until the lockout window clears.
+    const key = `${login.toLowerCase()}|${clientIp(req)}`;
+    this.throttle.assertNotLocked(key);
+    try {
+      const { token, identity } = await this.sessions.loginManager({ login, password });
+      this.throttle.recordSuccess(key);
+      setSessionCookie(res, token, 12 * 3600);
+      return { token, identity };
+    } catch (err) {
+      if (err instanceof UnauthorizedException) this.throttle.recordFailure(key);
+      throw err;
+    }
   }
 
   /** DEV-ONLY mock manager login. 404 in production. Prod manager login = POST /auth/manager/login. */
@@ -190,5 +225,17 @@ export class AuthController {
   me(@AuthIdentity() identity: SessionIdentity) {
     if (!identity) throw new UnauthorizedException();
     return identity;
+  }
+
+  /**
+   * P0-2 sub-issue 3: mint a short-lived, single-use SSE ticket. The caller must already be
+   * authenticated (cookie/bearer via TenantGuard); the ticket is bound to that identity and redeemed
+   * once by GET /objects/stream?ticket=. This replaces putting the raw session token in the SSE URL.
+   */
+  @Post('sse-ticket')
+  @UseGuards(TenantGuard)
+  sseTicket(@AuthIdentity() identity: SessionIdentity) {
+    if (!identity) throw new UnauthorizedException();
+    return { ticket: this.tickets.issue(identity) };
   }
 }
