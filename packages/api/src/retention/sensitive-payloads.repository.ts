@@ -57,6 +57,37 @@ export class SensitivePayloadsRepository {
   }
 
   /**
+   * P1-6-d · D-choice-1 read-path closure. Read the LIVE (un-redacted) sensitive content for one
+   * pointer, INSIDE the caller's tenant transaction. Returns the newest live payload's content, or
+   * `null` when it is absent OR already redacted — so read paths resolve sensitive raw material via
+   * the redactable side-store instead of the append-only source column. A redacted / missing payload
+   * therefore yields "unreadable", and callers MUST NOT fall back to the plaintext source column
+   * (KI-001): the append-only skeleton column is never read for sensitive content once closed.
+   *
+   * `redacted_at IS NULL` guarantees we never resurrect swept content; ORDER BY created_at DESC picks
+   * the most recent mirror for the pointer. Returns text content only (the two current closed fields
+   * — patient_code, llm input — are text); jsonb payloads are out of scope for this helper.
+   */
+  async readLivePayload(
+    c: PoolClient,
+    tenantId: string,
+    sourceTable: string,
+    sourceId: string,
+    field: string,
+  ): Promise<string | null> {
+    const res = await c.query<{ content: string | null }>(
+      `SELECT content
+         FROM sensitive_payloads
+        WHERE tenant_id = $1 AND source_table = $2 AND source_id = $3 AND field = $4
+          AND redacted_at IS NULL
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [tenantId, sourceTable, sourceId, field],
+    );
+    return res.rows[0]?.content ?? null;
+  }
+
+  /**
    * Retention sweep: redact every LIVE payload older than the configured window, using the 0020
    * redact-only primitive (content + content_jsonb → NULL, redacted_at stamped once). Idempotent —
    * already-redacted rows (redacted_at IS NOT NULL) are excluded, so a re-run redacts nothing new.

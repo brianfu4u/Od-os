@@ -4,6 +4,7 @@ import type { AttentionCandidate, RevealScanCodeResponse } from '@clearview/shar
 import { withTenant } from '../database/tenant-context';
 import { resolveAttentionConfig, type AttentionConfig } from './attention.config';
 import { runAllRules, type EmployeeFactsSnapshot } from './rules/attention-rules';
+import { SensitivePayloadsRepository } from '../retention/sensitive-payloads.repository';
 
 /** Whitelist of "activity progress" event types that refresh follow-up (mirrors freshness). */
 const PROGRESS_EVENT_TYPES = [
@@ -46,6 +47,8 @@ interface FactsRow {
  */
 @Injectable()
 export class AttentionRepository {
+  constructor(private readonly sensitive: SensitivePayloadsRepository) {}
+
   /** Generate candidates for all employees in the tenant. Pure read — writes nothing. */
   async generate(
     tenantId: string,
@@ -85,8 +88,12 @@ export class AttentionRepository {
     managerId: string | null,
   ): Promise<RevealScanCodeResponse> {
     return withTenant(tenantId, async (c) => {
-      const scan = await c.query<{ id: string; patient_code: string | null; scanned_at: string | null }>(
-        `SELECT id, patient_code, scanned_at
+      // Skeleton facts (id + scanned_at) come from the append-only row — those are non-sensitive.
+      // The sensitive raw code is NOT read from patient_scans.patient_code (KI-001): P1-6-d closes
+      // this read path to the redactable side-store, so a swept/redacted payload correctly yields
+      // `redacted` and the plaintext source column is never surfaced by the API.
+      const scan = await c.query<{ id: string; scanned_at: string | null }>(
+        `SELECT id, scanned_at
            FROM patient_scans
           WHERE employee_id = $1
           ORDER BY scanned_at DESC
@@ -94,9 +101,10 @@ export class AttentionRepository {
         [staffId],
       );
       const row = scan.rows[0];
-      const scanCode = row?.patient_code ?? null;
       const scanAt = row?.scanned_at ? new Date(row.scanned_at).toISOString() : null;
-      // No scan row → absent; a scan exists but its raw code is gone → redacted (retention).
+      // Resolve the raw code via the side-store (live only). Absent scan row → absent; scan exists but
+      // its live payload is gone (swept/redacted, or never mirrored) → redacted.
+      const scanCode = row ? await this.sensitive.readLivePayload(c, tenantId, 'patient_scans', row.id, 'patient_code') : null;
       const reason = row ? (scanCode === null ? ('redacted' as const) : undefined) : ('absent' as const);
 
       // Append the access event on THIS write operation (never on the GET queue read — P1-5 invariant).

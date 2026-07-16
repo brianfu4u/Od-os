@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AttentionController } from './attention.controller';
 import { AttentionService } from './attention.service';
 import { AttentionRepository } from './attention.repository';
+import { SensitivePayloadsRepository } from '../retention/sensitive-payloads.repository';
 
 /**
  * T-06/T-07/T-10 · manager attention queue (feat/attention-p0, Stage 3). Additive, READ-ONLY module.
@@ -13,6 +14,8 @@ import { AttentionRepository } from './attention.repository';
  */
 @Module({
   controllers: [AttentionController],
-  providers: [AttentionService, AttentionRepository],
+  // SensitivePayloadsRepository is provided so the reveal read path resolves the raw scan code via
+  // the redactable side-store (P1-6-d D-choice-1), never the append-only source column (KI-001).
+  providers: [AttentionService, AttentionRepository, SensitivePayloadsRepository],
 })
 export class AttentionModule {}

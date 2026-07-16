@@ -12,6 +12,13 @@
  *   - the reveal event_type is OUTSIDE the freshness whitelist (does not refresh employee_freshness);
  *   - absent case: a staff with no scan → { scanCode:null, reason:'absent' } (200-shaped, still audited);
  *   - tenant isolation: a reveal scoped to tenant A cannot read tenant B's scan code (RLS).
+ *
+ * P1-6-d · D-choice-1 read-path closure (updated): reveal now resolves the raw code from the
+ * redactable side-store (sensitive_payloads), NOT the append-only patient_scans.patient_code column
+ * (KI-001). So this test mirrors the code into the side-store (as P1-6-b dual-write / P1-6-d backfill
+ * would) to get a full reveal, and additionally proves that a scan whose side-store copy is REDACTED
+ * (or was never mirrored) reveals as { scanCode:null, reason:'redacted' } even though the plaintext
+ * still physically exists in the source column.
  */
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
@@ -19,6 +26,7 @@ import { Client } from 'pg';
 import { requireDatabaseUrl } from '../db/env';
 import { AttentionRepository } from '../src/attention/attention.repository';
 import { AttentionService } from '../src/attention/attention.service';
+import { SensitivePayloadsRepository } from '../src/retention/sensitive-payloads.repository';
 import { closePool } from '../src/database/pool';
 
 let passed = 0;
@@ -46,6 +54,24 @@ async function insScan(admin: Client, tenant: string, employeeId: string, code: 
   return r.rows[0]!.id;
 }
 
+/** Mirror the scan's raw code into the redactable side-store (as P1-6-b dual-write / -d backfill do). */
+async function mirrorScanCode(admin: Client, tenant: string, scanId: string, code: string): Promise<void> {
+  await admin.query(
+    `INSERT INTO sensitive_payloads (tenant_id, source_table, source_id, field, content)
+     VALUES ($1, 'patient_scans', $2, 'patient_code', $3)`,
+    [tenant, scanId, code],
+  );
+}
+
+/** Redact a side-store payload (as the retention sweep does): content → NULL, stamp redacted_at. */
+async function redactScanCode(admin: Client, tenant: string, scanId: string): Promise<void> {
+  await admin.query(
+    `UPDATE sensitive_payloads SET content = NULL, redacted_at = now()
+      WHERE tenant_id = $1 AND source_table = 'patient_scans' AND source_id = $2 AND field = 'patient_code'`,
+    [tenant, scanId],
+  );
+}
+
 function accessEventCount(admin: Client, staffId: string): Promise<number> {
   return admin
     .query<{ n: string }>(
@@ -58,7 +84,7 @@ function accessEventCount(admin: Client, staffId: string): Promise<number> {
 async function main(): Promise<void> {
   const url = requireDatabaseUrl();
   process.env.DATABASE_URL = url;
-  const repo = new AttentionRepository();
+  const repo = new AttentionRepository(new SensitivePayloadsRepository());
   const service = new AttentionService(repo);
   const admin = new Client({ connectionString: url });
   await admin.connect();
@@ -72,14 +98,23 @@ async function main(): Promise<void> {
 
     // Tenant A: a staff who scanned but never followed up → scan_no_followup fires with the code.
     const staff = await insObject(admin, A, { displayName: 'Tech A', staffHandle: 'tech_a' }, 'on_duty');
-    await insScan(admin, A, staff, RAW, 3600); // 1h ago, > 1800s follow-up window, no progress after
+    const scanId = await insScan(admin, A, staff, RAW, 3600); // 1h ago, > 1800s follow-up window, no progress after
+    await mirrorScanCode(admin, A, scanId, RAW); // P1-6-b/-d: raw code lives in the redactable side-store
+
+    // Tenant A: a staff whose scan's side-store copy is REDACTED (retention swept) → reveal must NOT
+    // fall back to the still-present plaintext source column (P1-6-d read-path closure, KI-001).
+    const redStaff = await insObject(admin, A, { displayName: 'Redacted', staffHandle: 'red_staff' }, 'on_duty');
+    const redScan = await insScan(admin, A, redStaff, 'PT-REDACTED-7', 3600);
+    await mirrorScanCode(admin, A, redScan, 'PT-REDACTED-7');
+    await redactScanCode(admin, A, redScan); // sweep redacts the side-store copy; source column untouched
 
     // Tenant A: a staff with NO scan → the absent path.
     const noScan = await insObject(admin, A, { displayName: 'No Scan', staffHandle: 'no_scan' }, 'on_duty');
 
     // Tenant B: a staff with a scan — must be invisible to a tenant-A-scoped reveal (RLS).
     const staffB = await insObject(admin, B, { displayName: 'Tech B', staffHandle: 'tech_b' }, 'on_duty');
-    await insScan(admin, B, staffB, 'PT-B-ONLY-99', 3600);
+    const scanB = await insScan(admin, B, staffB, 'PT-B-ONLY-99', 3600);
+    await mirrorScanCode(admin, B, scanB, 'PT-B-ONLY-99');
 
     // ── queue masking ──
     const view = await service.queue(A);
@@ -124,6 +159,17 @@ async function main(): Promise<void> {
     check(absent.scanCode === null && absent.reason === 'absent', 'absent: no scan → { scanCode:null, reason:absent } (200-shaped, not 404)');
     check((await accessEventCount(admin, noScan)) === 1, 'absent: the attempt is still audited (one access event)');
 
+    // ── P1-6-d redacted case: side-store copy swept → reveal returns redacted, NOT the source plaintext ──
+    const redResult = await repo.revealScanCode(A, redStaff, MGR);
+    check(redResult.scanCode === null && redResult.reason === 'redacted', 'redacted: swept side-store copy → { scanCode:null, reason:redacted } (source column NOT read)');
+    check(!JSON.stringify(redResult).includes('PT-REDACTED-7'), 'redacted: the plaintext still in the source column never leaks through reveal (D-choice-1 / KI-001)');
+    // confirm the plaintext DOES still physically exist in the append-only source column (KI-001 residual)
+    const srcStill = await admin.query<{ patient_code: string | null }>(
+      `SELECT patient_code FROM patient_scans WHERE id = $1`, [redScan],
+    );
+    check(srcStill.rows[0]!.patient_code === 'PT-REDACTED-7', 'KI-001: source column plaintext is intentionally still present (append-only), but unreachable via the API');
+    check((await accessEventCount(admin, redStaff)) === 1, 'redacted: the reveal attempt is still audited');
+
     // ── tenant isolation: reveal scoped to A cannot read B's scan → treated as absent ──
     const crossTenant = await repo.revealScanCode(A, staffB, MGR);
     check(crossTenant.scanCode === null, "isolation: tenant-A reveal cannot read tenant B's scan code (RLS)");
@@ -133,6 +179,7 @@ async function main(): Promise<void> {
     // trigger ONLY for test cleanup by temporarily disabling triggers (owner), then restore.
     await admin.query("SET session_replication_role = 'replica'");
     await admin.query(`DELETE FROM events WHERE tenant_id = ANY($1::uuid[])`, [[A, B]]);
+    await admin.query(`DELETE FROM sensitive_payloads WHERE tenant_id = ANY($1::uuid[])`, [[A, B]]);
     await admin.query(`DELETE FROM patient_scans WHERE tenant_id = ANY($1::uuid[])`, [[A, B]]);
     await admin.query(`DELETE FROM objects WHERE tenant_id = ANY($1::uuid[])`, [[A, B]]);
     await admin.query("SET session_replication_role = 'origin'");

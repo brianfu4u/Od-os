@@ -19,6 +19,7 @@ import { Client } from 'pg';
 import { requireDatabaseUrl } from '../db/env';
 import { AttentionRepository } from '../src/attention/attention.repository';
 import { AttentionService } from '../src/attention/attention.service';
+import { SensitivePayloadsRepository } from '../src/retention/sensitive-payloads.repository';
 import { closePool } from '../src/database/pool';
 
 let passed = 0;
@@ -59,7 +60,7 @@ async function insEvent(admin: Client, tenant: string, objectId: string, type: s
 async function main(): Promise<void> {
   const url = requireDatabaseUrl();
   process.env.DATABASE_URL = url;
-  const repo = new AttentionRepository();
+  const repo = new AttentionRepository(new SensitivePayloadsRepository());
   const service = new AttentionService(repo);
   const admin = new Client({ connectionString: url });
   await admin.connect();
