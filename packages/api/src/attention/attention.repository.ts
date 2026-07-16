@@ -4,7 +4,6 @@ import type { AttentionCandidate } from '@clearview/shared';
 import { withTenant } from '../database/tenant-context';
 import { resolveAttentionConfig, type AttentionConfig } from './attention.config';
 import { runAllRules, type EmployeeFactsSnapshot } from './rules/attention-rules';
-import { ATTENTION_EVENT_CANDIDATE_GENERATED } from './attention.events';
 
 /** Whitelist of "activity progress" event types that refresh follow-up (mirrors freshness). */
 const PROGRESS_EVENT_TYPES = [
@@ -35,15 +34,20 @@ interface FactsRow {
  *
  * Read-time model (no stored queue table): assemble every Staff member's facts from the freshness
  * view + latest scan + latest claim's verification layer + follow-up progress, run the four pure
- * rules, and return the resulting candidates. For EVERY candidate, append an
- * `attention.candidate.generated` event — the audit layer NEVER dedups (that is the queue display
- * layer's job, applied later in the service). The write is additive-only: no world state, no
- * claimed_status, no flow_state is ever mutated here, and NO employee-visible event is produced.
+ * rules, and return the resulting candidates. Pure READ: no world state, no claimed_status, no
+ * flow_state, and NO event of any kind is written here.
+ *
+ * P1-5 (intentional design change, NOT a bug fix): the previous T-10 behavior wrote one
+ * `attention.candidate.generated` event per candidate on EVERY read of GET /attention/queue. That
+ * read-time audit write was removed because (1) nothing downstream consumed those events (no cron,
+ * SSE, web, or service read them — they were write-only), and (2) it violated the attention queue's
+ * read-only definition (a GET must never mutate). If a candidate-generation audit trail is needed in
+ * future, it belongs on an actual write operation (claim / verify / scan), not on a read.
  */
 @Injectable()
 export class AttentionRepository {
-  /** Generate candidates for all employees in the tenant AND audit-log every one. */
-  async generateAndAudit(
+  /** Generate candidates for all employees in the tenant. Pure read — writes nothing. */
+  async generate(
     tenantId: string,
     env: Record<string, string | undefined> = process.env,
   ): Promise<{ candidates: AttentionCandidate[]; config: AttentionConfig }> {
@@ -57,28 +61,6 @@ export class AttentionRepository {
         const snapshot = this.toSnapshot(row, nowIso);
         const fired = runAllRules(snapshot, config);
         candidates.push(...fired);
-      }
-
-      // T-10: log EVERY candidate (no dedup at the write layer). Manager-side actor; the object_id
-      // is the employee the finding concerns, so the fact is traceable, but this is NOT an
-      // employee-visible event and it changes no world state.
-      for (const cand of candidates) {
-        await c.query(
-          `INSERT INTO events (tenant_id, object_id, event_type, payload, actor)
-           VALUES ($1, $2, $3, $4::jsonb, $5)`,
-          [
-            tenantId,
-            cand.employeeId,
-            ATTENTION_EVENT_CANDIDATE_GENERATED,
-            JSON.stringify({
-              kind: cand.kind,
-              evidenceSummary: cand.evidenceSummary,
-              lastEventAt: cand.lastEventAt,
-              generatedAt: cand.generatedAt,
-            }),
-            'manager',
-          ],
-        );
       }
 
       return { candidates, config };
