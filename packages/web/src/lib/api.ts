@@ -10,6 +10,7 @@
 import type {
   ActionLogRecord,
   AttentionQueueView,
+  RevealScanCodeResponse,
   AssignmentOverview,
   AssignmentResult,
   CreateTaskInput,
@@ -309,6 +310,22 @@ export function makeApi(auth?: string | ApiAuth) {
      */
     async fetchAttentionQueue(signal?: AbortSignal): Promise<AttentionQueueView> {
       return json(await fetch(`${API_BASE}/attention/queue`, { headers: authHeaders(), signal }));
+    },
+
+    /**
+     * P1-6-f · manager-only reveal of the FULL raw scan code behind a masked queue item
+     * (POST /attention/reveal-scan-code). Unlike the queue read, this is an audited WRITE: the
+     * server records one access event (who/when) each time it is called. Returns `scanCode:null`
+     * with a `reason` (200, never 404) when no code is available.
+     */
+    async revealScanCode(staffId: string): Promise<RevealScanCodeResponse> {
+      return json(
+        await fetch(`${API_BASE}/attention/reveal-scan-code`, {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ staffId }),
+        }),
+      );
     },
 
     /**

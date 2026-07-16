@@ -479,6 +479,12 @@
       "title": "注目リスト",
       "subtitle": "参考用の注目リスト（閲覧のみ・裁定の入口ではない）",
       "empty": "注目すべき項目はありません"
+    },
+    "reveal": {
+      "action": "原文を表示",
+      "revealing": "表示中…",
+      "recorded": "この閲覧は記録されました",
+      "absent": "原文なし"
     }
   },
   "employeeStatus": {

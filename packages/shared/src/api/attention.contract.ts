@@ -40,8 +40,20 @@ export interface AttentionEvidenceSummary {
   when: string | null;
   /** What the employee CLAIMED (their self-declared status), or null. */
   claimed: string | null;
-  /** What the employee SUBMITTED (their most recent volunteered fact, e.g. a scan code), or null. */
+  /**
+   * What the employee SUBMITTED (their most recent volunteered fact, e.g. a scan code).
+   *
+   * P1-6-f privacy change: this is NEVER the raw value on the wire. When the underlying fact is a
+   * raw patient scan code it is returned MASKED (e.g. `PT-****`); the full value is obtained only
+   * via the audited manager-only `POST /attention/reveal-scan-code`. When there is no such fact it
+   * is null. Non-sensitive `submitted` facts (currently none) would pass through unmasked.
+   */
   submitted: string | null;
+  /**
+   * True when `submitted` is a MASKED sensitive value that a manager may reveal in full via the
+   * audited reveal endpoint. False/absent when `submitted` is null or a non-sensitive plain fact.
+   */
+  revealable?: boolean;
   /** What the system OBSERVED (a derived, read-time fact, e.g. "3720s since last valid event"). */
   systemObserved: string | null;
 }
@@ -85,4 +97,46 @@ export interface AttentionQueueView {
 /** Stable, stateless item id from (employee, kind). */
 export function attentionItemId(employeeId: string, kind: AttentionKind): string {
   return `${employeeId}:${kind}`;
+}
+
+/**
+ * P1-6-f · mask a raw patient scan code for the default (un-revealed) queue view.
+ *
+ * Keeps a readable prefix (through the first `-`, or the first 2 chars when there is no `-`) so a
+ * manager can recognize "same patient code" at a glance, and replaces the rest with `****`. The full
+ * value is NEVER placed on the wire by the queue — it is obtained only via the audited reveal
+ * endpoint. Returns null for null/empty input.
+ */
+export function maskScanCode(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const dash = raw.indexOf('-');
+  const prefix = dash > 0 ? raw.slice(0, dash + 1) : raw.slice(0, 2);
+  return `${prefix}****`;
+}
+
+/**
+ * P1-6-f · audited reveal of a masked patient scan code.
+ *
+ * `POST /attention/reveal-scan-code` is MANAGER-ONLY. Unlike `GET /attention/queue` (a pure read
+ * that must never mutate), this is a real WRITE operation: it appends one `sensitive.raw.accessed`
+ * access event to the ledger (proving WHO viewed the raw value and WHEN — the event payload NEVER
+ * copies the raw content itself) and returns the full scan code. The employee it concerns is
+ * identified by `staffId` (an item's `employeeId`), matching the per-employee shape of the queue.
+ */
+export interface RevealScanCodeRequest {
+  /** The employee whose most-recent scan code to reveal — an AttentionItem.employeeId. */
+  staffId: string;
+}
+
+/** Why a reveal returned no code (200 + reason rather than 404, to avoid leaking record existence). */
+export type RevealScanCodeReason = 'absent' | 'redacted';
+
+export interface RevealScanCodeResponse {
+  staffId: string;
+  /** The full raw scan code, or null when unavailable (see `reason`). */
+  scanCode: string | null;
+  /** When that scan happened (ISO), or null. */
+  scanAt: string | null;
+  /** Present only when `scanCode` is null: `absent` (no scan on record) or `redacted` (past retention window). */
+  reason?: RevealScanCodeReason;
 }

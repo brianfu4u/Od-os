@@ -64,7 +64,19 @@ describe('ruleScanNoFollowup', () => {
       CFG,
     );
     expect(c?.kind).toBe('scan_no_followup');
-    expect(c?.evidenceSummary.submitted).toBe('PT-7');
+    // P1-6-f: the raw scan code is MASKED on the wire (never the full value); flagged revealable.
+    expect(c?.evidenceSummary.submitted).toBe('PT-****');
+    expect(c?.evidenceSummary.submitted).not.toBe('PT-7');
+    expect(c?.evidenceSummary.revealable).toBe(true);
+  });
+  it('P1-6-f: masks the code but stays revealable; no raw code leaks into the candidate', () => {
+    const c = ruleScanNoFollowup(
+      facts({ lastScanAt: NOW, lastScanCode: 'ABC12345', secondsSinceLastScan: 2000, secondsSinceScanFollowup: null }),
+      CFG,
+    );
+    expect(c?.evidenceSummary.submitted).toBe('AB****');
+    expect(c?.evidenceSummary.revealable).toBe(true);
+    expect(JSON.stringify(c)).not.toContain('ABC12345');
   });
   it('does NOT fire without a scan, or when there was follow-up progress, or still within window', () => {
     expect(ruleScanNoFollowup(facts({ secondsSinceLastScan: null }), CFG)).toBeNull();

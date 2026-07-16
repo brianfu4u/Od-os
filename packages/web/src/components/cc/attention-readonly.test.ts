@@ -50,10 +50,8 @@ describe('T-09 · manager read-only panels carry NO adjudication control', () =>
       }
     });
 
-    it(`${file}: its only <button> is the passive refetch (no action buttons)`, () => {
-      const buttons = src.match(/<button\b/g) ?? [];
-      expect(buttons.length, `${file} should have exactly one button (refresh)`).toBe(1);
-      // The single button must call the loader, never a mutation.
+    it(`${file}: carries a passive refetch and NO adjudication button`, () => {
+      // The refetch loader button must be present and wired to the loader, never a mutation.
       expect(src).toMatch(/onClick=\{\(\)\s*=>\s*void load\(\)\}/);
     });
 
@@ -61,6 +59,25 @@ describe('T-09 · manager read-only panels carry NO adjudication control', () =>
       expect(src).not.toMatch(/verificationResult|verificationConfidence|verificationScore|verdict/i);
     });
   }
+
+  // StatusBoard remains strictly single-button. AttentionPanel gains ONE additional non-adjudicating
+  // control in P1-6-f: an audited scan-code reveal. It is manager-side sensitive-data access (records
+  // who/when), NOT a decision — it approves/rejects/shelves nothing and mutates no world state.
+  it('StatusBoard.tsx: still has exactly one button (passive refetch only)', () => {
+    const buttons = read('StatusBoard.tsx').match(/<button\b/g) ?? [];
+    expect(buttons.length, 'StatusBoard should have exactly one button (refresh)').toBe(1);
+  });
+
+  it('AttentionPanel.tsx: its only non-refetch button is the audited reveal (calls revealScanCode, not a decision)', () => {
+    const src = read('AttentionPanel.tsx');
+    const buttons = src.match(/<button\b/g) ?? [];
+    expect(buttons.length, 'AttentionPanel has the refetch button + the reveal button').toBe(2);
+    // The added button reveals a masked code via the audited endpoint — never an adjudication call.
+    expect(src).toMatch(/\brevealScanCode\b/);
+    for (const pat of FORBIDDEN) {
+      expect(src, `reveal button must not be an adjudication (${pat})`).not.toMatch(pat);
+    }
+  });
 
   it('positive control: AssignPanel IS the adjudication surface (decideTask present)', () => {
     const assign = read('AssignPanel.tsx');

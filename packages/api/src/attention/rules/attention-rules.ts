@@ -9,10 +9,11 @@
  * The queue service (T-06) feeds each employee's snapshot through `runAllRules`, logs every
  * resulting candidate (T-10, no dedup), then applies display-layer dedup/cooldown for the manager.
  */
-import type {
-  AttentionCandidate,
-  AttentionEvidenceSummary,
-  AttentionKind,
+import {
+  maskScanCode,
+  type AttentionCandidate,
+  type AttentionEvidenceSummary,
+  type AttentionKind,
 } from '@clearview/shared';
 import type { AttentionConfig } from '../attention.config';
 
@@ -129,7 +130,10 @@ export function ruleScanNoFollowup(
     who: facts.employeeName,
     when: facts.lastScanAt,
     claimed: facts.claimedStatus,
-    submitted: facts.lastScanCode,
+    // P1-6-f: the raw patient scan code is NEVER put on the wire by the queue. Emit a mask here and
+    // flag it revealable; the full value is obtained only via the audited manager-only reveal endpoint.
+    submitted: maskScanCode(facts.lastScanCode),
+    revealable: facts.lastScanCode != null && facts.lastScanCode !== '',
     systemObserved: `${Math.round(
       facts.secondsSinceLastScan,
     )}s since scan with no patient-flow progress (window ${cfg.scanFollowupSeconds}s)`,

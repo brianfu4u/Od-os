@@ -407,6 +407,41 @@ export async function runHttpSmoke({
   const staffOnAttn = await fetch(`${base}/attention/queue`, { headers: SH });
   check(staffOnAttn.status === 403, `staff session on manager-only /attention/queue → 403 (got ${staffOnAttn.status})`);
 
+  // ── P1-6-f · scan-code masking + audited reveal ──
+  log('\nP1-6-f reveal (scan-code masked in queue, audited reveal endpoint):');
+  // Any surfaced scan code in the queue must already be MASKED — the raw value never rides the queue.
+  const revealable = (attnBody.items ?? []).find((it) => it.evidenceSummary?.revealable === true);
+  if (revealable) {
+    check(
+      typeof revealable.evidenceSummary.submitted === 'string' && revealable.evidenceSummary.submitted.includes('****'),
+      `queue: revealable item's submitted is masked (got ${revealable.evidenceSummary.submitted})`,
+    );
+  }
+  // reveal target: a revealable item if present, else any staff (exercises the endpoint + 200 shape).
+  const revealStaffId = revealable?.employeeId ?? login.identity?.staffId;
+  // A staff session must NOT reach the manager-only reveal endpoint.
+  const staffOnReveal = await fetch(`${base}/attention/reveal-scan-code`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${login.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ staffId: revealStaffId }),
+  });
+  check(staffOnReveal.status === 403, `staff session on manager-only /attention/reveal-scan-code → 403 (got ${staffOnReveal.status})`);
+  // A missing staffId is a 400 (body validation), never a silent 200.
+  const revealNoBody = await fetch(`${base}/attention/reveal-scan-code`, { method: 'POST', headers: MH, body: JSON.stringify({}) });
+  check(revealNoBody.status === 400, `manager reveal without staffId → 400 (got ${revealNoBody.status})`);
+  // A manager reveal returns 200 with the { staffId, scanCode, scanAt } shape (scanCode may be null +
+  // reason when absent — never a 404, so existence can't be probed via status codes).
+  const revealResp = await fetch(`${base}/attention/reveal-scan-code`, { method: 'POST', headers: MH, body: JSON.stringify({ staffId: revealStaffId }) });
+  const revealBody = await revealResp.json().catch(() => ({}));
+  check(revealResp.status === 200, `manager reveal → 200 (got ${revealResp.status})`);
+  check(
+    'scanCode' in revealBody && (revealBody.scanCode === null ? typeof revealBody.reason === 'string' : typeof revealBody.scanCode === 'string'),
+    'reveal response is { scanCode:string } or { scanCode:null, reason } (200-shaped, never 404)',
+  );
+  if (revealable) {
+    check(typeof revealBody.scanCode === 'string' && !revealBody.scanCode.includes('****'), 'reveal returns the FULL raw code (not the masked form) for a revealable item');
+  }
+
   // ── manager status board (T-09 · D1-A): manager-only, read-only whole-roster snapshot ──
   log('\nmanager status board (stage 4 · D1-A):');
   const boardResp = await fetch(`${base}/employee-status/board`, { headers: MH });

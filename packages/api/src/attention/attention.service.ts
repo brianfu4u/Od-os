@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { AttentionQueueView } from '@clearview/shared';
+import type { AttentionQueueView, RevealScanCodeResponse } from '@clearview/shared';
 import { AttentionRepository } from './attention.repository';
 import { dedupForDisplay } from './rules/attention-dedup';
 
@@ -24,5 +24,17 @@ export class AttentionService {
     const { candidates } = await this.repo.generate(tenantId);
     const items = dedupForDisplay(candidates);
     return { items };
+  }
+
+  /**
+   * P1-6-f · audited reveal of a masked patient scan code (manager-only). Delegates to the repository
+   * write path, which appends the `sensitive.raw.accessed` access event and returns the full code.
+   */
+  revealScanCode(
+    tenantId: string,
+    staffId: string,
+    managerId: string | null,
+  ): Promise<RevealScanCodeResponse> {
+    return this.repo.revealScanCode(tenantId, staffId, managerId);
   }
 }

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { PoolClient } from 'pg';
-import type { AttentionCandidate } from '@clearview/shared';
+import type { AttentionCandidate, RevealScanCodeResponse } from '@clearview/shared';
 import { withTenant } from '../database/tenant-context';
 import { resolveAttentionConfig, type AttentionConfig } from './attention.config';
 import { runAllRules, type EmployeeFactsSnapshot } from './rules/attention-rules';
@@ -64,6 +64,61 @@ export class AttentionRepository {
       }
 
       return { candidates, config };
+    });
+  }
+
+  /**
+   * P1-6-f · AUDITED reveal of an employee's most-recent raw patient scan code. This is a real WRITE
+   * operation (called only from POST /attention/reveal-scan-code, manager-only), NOT the read path:
+   * it appends exactly one `sensitive.raw.accessed` access event to the ledger — proving WHO (manager)
+   * viewed the raw value and WHEN — and returns the full code. The event payload deliberately does
+   * NOT copy the raw content (no second copy of the sensitive value; the one controlled/redactable
+   * copy lives in sensitive_payloads). `event_type` is intentionally OUTSIDE the 0016 freshness
+   * whitelist, so a reveal never refreshes the employee's freshness.
+   *
+   * Returns 200-shaped data even when there is no code (reason 'absent' | 'redacted'), so callers
+   * cannot probe record existence via status codes. An access event is still recorded for the attempt.
+   */
+  async revealScanCode(
+    tenantId: string,
+    staffId: string,
+    managerId: string | null,
+  ): Promise<RevealScanCodeResponse> {
+    return withTenant(tenantId, async (c) => {
+      const scan = await c.query<{ id: string; patient_code: string | null; scanned_at: string | null }>(
+        `SELECT id, patient_code, scanned_at
+           FROM patient_scans
+          WHERE employee_id = $1
+          ORDER BY scanned_at DESC
+          LIMIT 1`,
+        [staffId],
+      );
+      const row = scan.rows[0];
+      const scanCode = row?.patient_code ?? null;
+      const scanAt = row?.scanned_at ? new Date(row.scanned_at).toISOString() : null;
+      // No scan row → absent; a scan exists but its raw code is gone → redacted (retention).
+      const reason = row ? (scanCode === null ? ('redacted' as const) : undefined) : ('absent' as const);
+
+      // Append the access event on THIS write operation (never on the GET queue read — P1-5 invariant).
+      // object_id = the Staff object (valid objects FK); the scan id lives in payload for traceability.
+      await c.query(
+        `INSERT INTO events (tenant_id, object_id, event_type, payload, actor)
+         VALUES ($1, $2, 'sensitive.raw.accessed', $3::jsonb, $4)`,
+        [
+          tenantId,
+          staffId,
+          JSON.stringify({
+            field: 'patient_code',
+            surface: 'attention.reveal',
+            staffId,
+            scanId: row?.id ?? null,
+            outcome: scanCode !== null ? 'revealed' : (reason ?? 'absent'),
+          }),
+          managerId,
+        ],
+      );
+
+      return { staffId, scanCode, scanAt, ...(reason ? { reason } : {}) };
     });
   }
 

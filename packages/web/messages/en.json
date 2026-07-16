@@ -479,6 +479,12 @@
       "title": "Attention list",
       "subtitle": "Findings to look at (read-only, not an adjudication surface)",
       "empty": "Nothing needs attention"
+    },
+    "reveal": {
+      "action": "Reveal",
+      "revealing": "Revealing…",
+      "recorded": "This view has been recorded",
+      "absent": "No code"
     }
   },
   "employeeStatus": {
