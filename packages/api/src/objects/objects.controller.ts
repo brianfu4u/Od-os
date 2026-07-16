@@ -13,11 +13,21 @@ import {
 import { type Observable, map } from 'rxjs';
 import type { CreateObjectInput, UpdateObjectInput, ObjectChangeEvent } from '@clearview/shared';
 import { TenantGuard } from '../tenant/tenant.guard';
+import { RolesGuard } from '../tenant/roles.guard';
+import { Roles } from '../tenant/roles.decorator';
 import { TenantId } from '../tenant/tenant.decorator';
 import { ObjectsService } from './objects.service';
 import { RealtimeService } from './realtime.service';
 
-@UseGuards(TenantGuard)
+/**
+ * P0-1: the generic object write surface (create / update / archive) is MANAGER-ONLY. A staff
+ * caller can read objects but must go through the narrow, purpose-built endpoints (/reports,
+ * /uploads, /scans, /tasks/mine) to affect state — those never accept verification fields. Reads
+ * (list / get / timeline / stream / resolve) stay open to any authenticated caller. Combined with
+ * the DTOs no longer carrying verifiedState/verificationScore and the DB-level guard trigger, this
+ * keeps "verified" writable only by the deterministic S2 Verification Service.
+ */
+@UseGuards(TenantGuard, RolesGuard)
 @Controller('objects')
 export class ObjectsController {
   constructor(
@@ -26,6 +36,7 @@ export class ObjectsController {
   ) {}
 
   @Post()
+  @Roles('manager')
   create(@TenantId() tenantId: string, @Body() body: CreateObjectInput) {
     return this.objects.create(tenantId, body);
   }
@@ -75,11 +86,13 @@ export class ObjectsController {
   }
 
   @Patch(':id')
+  @Roles('manager')
   update(@TenantId() tenantId: string, @Param('id') id: string, @Body() body: UpdateObjectInput) {
     return this.objects.update(tenantId, id, body);
   }
 
   @Delete(':id')
+  @Roles('manager')
   async remove(@TenantId() tenantId: string, @Param('id') id: string) {
     await this.objects.remove(tenantId, id);
     return { ok: true };

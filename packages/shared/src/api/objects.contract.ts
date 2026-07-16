@@ -4,23 +4,31 @@
  */
 import type { TaskFlowState, TaskRejection } from './assignment.contract';
 
-/** Create a new ontology object. `type` is required; per-type fields go in `properties`. */
+/**
+ * Create a new ontology object. `type` is required; per-type fields go in `properties`.
+ *
+ * P0-1: `verifiedState` / `verificationScore` are intentionally NOT writable here. The verdict is
+ * owned by the deterministic S2 Verification Service; it is the only writer (enforced at the API,
+ * DTO, and DB layers). Callers set only the claim/expectation; verification is computed, never
+ * asserted.
+ */
 export interface CreateObjectInput {
   type: string;
   properties?: Record<string, unknown>;
   expectedState?: string | null;
   claimedState?: string | null;
-  verifiedState?: string | null;
-  verificationScore?: number | null;
 }
 
-/** Partial update. Any provided state field is set; `properties` are shallow-merged. */
+/**
+ * Partial update. Any provided state field is set; `properties` are shallow-merged.
+ *
+ * P0-1: `verifiedState` / `verificationScore` are intentionally NOT writable here — see
+ * CreateObjectInput.
+ */
 export interface UpdateObjectInput {
   properties?: Record<string, unknown>;
   expectedState?: string | null;
   claimedState?: string | null;
-  verifiedState?: string | null;
-  verificationScore?: number | null;
 }
 
 /** Filter for listing objects. Soft-deleted (archived) objects are excluded by default. */

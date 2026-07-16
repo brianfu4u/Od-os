@@ -69,9 +69,12 @@ function mapObject(r: ObjectRow): OntologyObject {
 export class ObjectsRepository {
   async create(tenantId: string, input: CreateObjectInput): Promise<OntologyObject> {
     return withTenant(tenantId, async (c) => {
+      // P0-1: verified_state/verification_score are NOT set here — they are owned exclusively by S2
+      // Verification Service (they default to NULL for a fresh object and only ever move through
+      // the verification write path, which is additionally guarded by a DB trigger).
       const res = await c.query<ObjectRow>(
-        `INSERT INTO objects (tenant_id, type, properties, expected_state, claimed_state, verified_state, verification_score)
-         VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7)
+        `INSERT INTO objects (tenant_id, type, properties, expected_state, claimed_state)
+         VALUES ($1, $2, $3::jsonb, $4, $5)
          RETURNING *`,
         [
           tenantId,
@@ -79,8 +82,6 @@ export class ObjectsRepository {
           JSON.stringify(input.properties ?? {}),
           input.expectedState ?? null,
           input.claimedState ?? null,
-          input.verifiedState ?? null,
-          input.verificationScore ?? null,
         ],
       );
       const row = res.rows[0]!;
@@ -177,9 +178,11 @@ export class ObjectsRepository {
         ? { ...existing.properties, ...input.properties }
         : existing.properties;
 
+      // P0-1: this generic update never touches verified_state/verification_score. They remain as
+      // the S2 Verification Service last wrote them (owned by verification; DB trigger enforces it).
       const res = await c.query<ObjectRow>(
         `UPDATE objects
-           SET properties = $2::jsonb, expected_state = $3, claimed_state = $4, verified_state = $5, verification_score = $6
+           SET properties = $2::jsonb, expected_state = $3, claimed_state = $4
          WHERE id = $1
          RETURNING *`,
         [
@@ -187,12 +190,6 @@ export class ObjectsRepository {
           JSON.stringify(mergedProps),
           input.expectedState !== undefined ? input.expectedState : existing.expected_state,
           input.claimedState !== undefined ? input.claimedState : existing.claimed_state,
-          input.verifiedState !== undefined ? input.verifiedState : existing.verified_state,
-          input.verificationScore !== undefined
-            ? input.verificationScore
-            : existing.verification_score === null
-              ? null
-              : Number(existing.verification_score),
         ],
       );
       const row = res.rows[0]!;
