@@ -6,6 +6,7 @@ import {
   parseCorsAllowList,
   resolveCorsOptions,
   resolveDbSsl,
+  resolveExternalProviders,
 } from './security';
 
 const HOSTED = 'postgresql://u:p@db.example.com:5432/clearview_od';
@@ -148,5 +149,25 @@ describe('helpers', () => {
     expect(isValidOrigin('https://x.com/path')).toBe(false);
     expect(isValidOrigin('*')).toBe(false);
     expect(isValidOrigin('not-a-url')).toBe(false);
+  });
+});
+
+describe('resolveExternalProviders — P1-6-c compliance downgrade switch', () => {
+  it('is ENABLED by default (flag absent) so keyed deployments keep external LLM/STT', () => {
+    expect(resolveExternalProviders({})).toEqual({ enabled: true, reason: 'enabled' });
+  });
+
+  it("is DISABLED only when COMPLIANCE_EXTERNAL_PROVIDERS is exactly 'off' (case/space-insensitive)", () => {
+    expect(resolveExternalProviders({ COMPLIANCE_EXTERNAL_PROVIDERS: 'off' }).enabled).toBe(false);
+    expect(resolveExternalProviders({ COMPLIANCE_EXTERNAL_PROVIDERS: 'OFF' }).enabled).toBe(false);
+    expect(resolveExternalProviders({ COMPLIANCE_EXTERNAL_PROVIDERS: '  Off  ' }).enabled).toBe(false);
+    expect(resolveExternalProviders({ COMPLIANCE_EXTERNAL_PROVIDERS: 'off' }).reason).toBe('compliance-off');
+  });
+
+  it('keeps external ENABLED for any non-off value (fails open to today behaviour, never silent-off)', () => {
+    expect(resolveExternalProviders({ COMPLIANCE_EXTERNAL_PROVIDERS: 'on' }).enabled).toBe(true);
+    expect(resolveExternalProviders({ COMPLIANCE_EXTERNAL_PROVIDERS: '' }).enabled).toBe(true);
+    expect(resolveExternalProviders({ COMPLIANCE_EXTERNAL_PROVIDERS: 'true' }).enabled).toBe(true);
+    expect(resolveExternalProviders({ COMPLIANCE_EXTERNAL_PROVIDERS: 'disabled' }).enabled).toBe(true);
   });
 });
