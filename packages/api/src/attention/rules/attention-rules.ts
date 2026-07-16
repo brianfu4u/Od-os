@@ -43,8 +43,8 @@ export interface EmployeeFactsSnapshot {
   secondsSinceScanFollowup: number | null;
   /** Latest silent consistency verdict for this employee's status, or null if unchecked. */
   verificationResult: string | null;
-  /** Latest silent consistency confidence (0..1), or null if unchecked. */
-  verificationConfidence: number | null;
+  /** Latest silent consistency verification score (0..1), or null if unchecked. */
+  verificationScore: number | null;
   /** Read-time "now" as ISO, used as generatedAt. */
   nowIso: string;
 }
@@ -146,7 +146,7 @@ export function ruleLowConfidence(
   cfg: AttentionConfig,
 ): AttentionCandidate | null {
   const verdict = facts.verificationResult;
-  const conf = facts.verificationConfidence;
+  const conf = facts.verificationScore;
   const inconsistent = verdict === 'inconsistent';
   const belowFloor = conf !== null && conf < cfg.lowConfidenceThreshold;
   if (!inconsistent && !belowFloor) return null;

@@ -24,7 +24,7 @@ function facts(over: Partial<EmployeeFactsSnapshot> = {}): EmployeeFactsSnapshot
     secondsSinceLastScan: null,
     secondsSinceScanFollowup: null,
     verificationResult: null,
-    verificationConfidence: null,
+    verificationScore: null,
     nowIso: NOW,
     ...over,
   };
@@ -82,11 +82,11 @@ describe('ruleLowConfidence', () => {
     expect(ruleLowConfidence(facts({ verificationResult: 'inconsistent' }), CFG)?.kind).toBe('low_confidence');
   });
   it('fires when confidence is below the threshold', () => {
-    expect(ruleLowConfidence(facts({ verificationConfidence: 0.4 }), CFG)?.kind).toBe('low_confidence');
+    expect(ruleLowConfidence(facts({ verificationScore: 0.4 }), CFG)?.kind).toBe('low_confidence');
   });
   it('does NOT fire when consistent and confidence at/above threshold, or when unchecked', () => {
-    expect(ruleLowConfidence(facts({ verificationResult: 'consistent', verificationConfidence: 0.9 }), CFG)).toBeNull();
-    expect(ruleLowConfidence(facts({ verificationConfidence: 0.6 }), CFG)).toBeNull(); // exactly at floor is fine
+    expect(ruleLowConfidence(facts({ verificationResult: 'consistent', verificationScore: 0.9 }), CFG)).toBeNull();
+    expect(ruleLowConfidence(facts({ verificationScore: 0.6 }), CFG)).toBeNull(); // exactly at floor is fine
     expect(ruleLowConfidence(facts({}), CFG)).toBeNull(); // unchecked
   });
 });

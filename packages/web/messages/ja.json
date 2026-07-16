@@ -305,7 +305,7 @@
     "model": "モデル",
     "language": "言語",
     "sttConfidence": "STT 信頼度",
-    "verifyConfidence": "検証信頼度",
+    "verifyConfidence": "検証スコア",
     "claim": "システムが聞き取った主張(申告、判定ではない)",
     "verdict": "クロス検証の判定(「検証済み」の唯一の出所)",
     "noClaim": "主張は形成されず",

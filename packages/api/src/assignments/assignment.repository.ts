@@ -46,7 +46,7 @@ interface TaskRow {
   properties: Record<string, unknown>;
   claimed_state: string | null;
   verified_state: string | null;
-  confidence: string | null;
+  verification_score: string | null;
   updated_at: string;
   room_label: string | null;
   assignee_id: string | null;
@@ -111,7 +111,7 @@ export class AssignmentRepository {
   overview(tenantId: string): Promise<AssignmentOverview> {
     return withTenant(tenantId, async (c) => {
       const tasksRes = await c.query<TaskRow>(
-        `SELECT t.id, t.properties, t.claimed_state, t.verified_state, t.confidence, t.updated_at,
+        `SELECT t.id, t.properties, t.claimed_state, t.verified_state, t.verification_score, t.updated_at,
                 t.flow_id, t.flow_state,
                 room.label AS room_label,
                 a.staff_id AS assignee_id, a.staff_props AS assignee_props,
@@ -159,7 +159,7 @@ export class AssignmentRepository {
           roomLabel: r.room_label ?? null,
           claimedState: r.claimed_state,
           verifiedState: r.verified_state,
-          confidence: r.confidence === null ? null : Number(r.confidence),
+          verificationScore: r.verification_score === null ? null : Number(r.verification_score),
           dueBy: str(p.dueBy),
           updatedAt: new Date(r.updated_at).toISOString(),
           assignee,

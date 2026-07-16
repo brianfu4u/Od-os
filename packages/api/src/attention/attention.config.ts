@@ -5,7 +5,7 @@
  *   - silence:        3600s (1h)   — on_duty with no valid event for this long → silence
  *   - busy window:     600s (10m)  — busy but no corroborating activity in this window → inconsistency
  *   - scan follow-up: 1800s (30m)  — a scan with no patient-flow progress within this window → no_followup
- *   - low confidence:  0.60        — verification_confidence below this (or verdict 'inconsistent') → low_confidence
+ *   - low confidence:  0.60        — verification_score below this (or verdict 'inconsistent') → low_confidence
  *   - display cooldown 7200s (2h)  — QUEUE display-layer dedup window (T-06 only). NOTE: this NEVER
  *                                    gates the audit write — every candidate is still logged (T-10).
  *

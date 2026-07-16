@@ -11,8 +11,8 @@
 export interface VoiceFeedVerdict {
   /** verified | conflict | pending | unverified (from the driving Task; the only "verified" source). */
   verifiedState: string;
-  /** Verification confidence in [0,1] — distinct from STT confidence. */
-  confidence: number | null;
+  /** Verification score in [0,1] — distinct from STT confidence. */
+  verificationScore: number | null;
 }
 
 export interface VoiceFeedRecord {

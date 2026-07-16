@@ -11,7 +11,7 @@ export interface CreateObjectInput {
   expectedState?: string | null;
   claimedState?: string | null;
   verifiedState?: string | null;
-  confidence?: number | null;
+  verificationScore?: number | null;
 }
 
 /** Partial update. Any provided state field is set; `properties` are shallow-merged. */
@@ -20,7 +20,7 @@ export interface UpdateObjectInput {
   expectedState?: string | null;
   claimedState?: string | null;
   verifiedState?: string | null;
-  confidence?: number | null;
+  verificationScore?: number | null;
 }
 
 /** Filter for listing objects. Soft-deleted (archived) objects are excluded by default. */
@@ -62,7 +62,7 @@ export interface TimelineEvent {
 export interface TimelineLedgerRow {
   id: string;
   verifiedState: string;
-  confidence: number;
+  verificationScore: number;
   evidence: Array<{ kind?: string; ref?: string; note?: string }>;
   reason?: string | null;
   at: string;
@@ -80,7 +80,7 @@ export interface ObjectTimeline {
     expectedState: string | null;
     claimedState: string | null;
     verifiedState: string | null;
-    confidence: number | null;
+    verificationScore: number | null;
   } | null;
   events: TimelineEvent[];
   ledger: TimelineLedgerRow[];
@@ -98,7 +98,7 @@ export interface ScanResolveResult {
   /** Human label (properties.label / name / taskType, else the type). */
   label: string;
   verifiedState: string | null;
-  confidence: number | null;
+  verificationScore: number | null;
 }
 
 /**
@@ -116,7 +116,7 @@ export interface MyTaskSummary {
   claimedState: string | null;
   /** The ONLY verdict source (deterministic S2). null ⇒ treat as unverified; never defaulted to verified. */
   verifiedState: string | null;
-  confidence: number | null;
+  verificationScore: number | null;
   dueBy: string | null;
   updatedAt: string;
   /**

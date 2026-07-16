@@ -19,10 +19,10 @@ function check(cond: boolean, label: string): void {
   else { failed += 1; console.error(`  ✗ ${label}`); }
 }
 
-async function insObject(admin: Client, tenant: string, type: string, properties: Record<string, unknown>, verified: string | null = null, confidence: number | null = null): Promise<string> {
+async function insObject(admin: Client, tenant: string, type: string, properties: Record<string, unknown>, verified: string | null = null, verificationScore: number | null = null): Promise<string> {
   const res = await admin.query<{ id: string }>(
-    `INSERT INTO objects (tenant_id, type, properties, verified_state, confidence) VALUES ($1,$2,$3::jsonb,$4,$5) RETURNING id`,
-    [tenant, type, JSON.stringify(properties), verified, confidence],
+    `INSERT INTO objects (tenant_id, type, properties, verified_state, verification_score) VALUES ($1,$2,$3::jsonb,$4,$5) RETURNING id`,
+    [tenant, type, JSON.stringify(properties), verified, verificationScore],
   );
   return res.rows[0]!.id;
 }
@@ -62,7 +62,7 @@ async function main(): Promise<void> {
     const mineSA = await repo.listMine(A, ident(A, SA));
     check(mineSA.length === 1 && mineSA[0]!.taskId === task1, 'SA sees exactly their assigned task (not SA2\'s)');
     check(mineSA[0]!.roomLabel === 'Room 3' && mineSA[0]!.label === 'Turnover · Room 3', 'includes linked Room label + task label');
-    check(mineSA[0]!.verifiedState === 'conflict' && Math.abs((mineSA[0]!.confidence ?? 0) - 0.5) < 1e-9, 'verdict passes through from Task.verified_state (S2)');
+    check(mineSA[0]!.verifiedState === 'conflict' && Math.abs((mineSA[0]!.verificationScore ?? 0) - 0.5) < 1e-9, 'verdict passes through from Task.verified_state (S2)');
 
     const mineSA2 = await repo.listMine(A, ident(A, SA2));
     check(mineSA2.length === 1 && mineSA2[0]!.taskId === task2, 'SA2 sees only their own task (per-person filter)');

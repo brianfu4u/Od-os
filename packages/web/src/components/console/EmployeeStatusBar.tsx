@@ -12,7 +12,7 @@ import { hhmm } from '../../lib/format';
  * The seven principles this component physically enforces:
  *   1. 提交不驳回 — every legal five-state tap succeeds; there is no path that blocks/rejects it, and
  *      the optional note is skippable (never required).
- *   2. AI输出只给经理参考 — this surface NEVER renders a verification result, confidence, consistency
+ *   2. AI输出只给经理参考 — this surface NEVER renders a verification result, verification score, consistency
  *      verdict, or any AI/evaluative feedback. It reads back ONLY the employee-facing claim view
  *      (claimedStatus / note / claimedAt). No feedback loop to the employee, by construction.
  *   3. claim vs verified 分离 — we only ever touch the CLAIM layer (api.submitStatusClaim →

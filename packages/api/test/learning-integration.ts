@@ -3,7 +3,7 @@
  * Proves: learning_feedback is append-only + tenant-isolated; a deterministic `learn` run produces
  * BOUNDED, audited parameter changes; a repeatedly-ignored domain is downgraded; an evidence kind
  * that repeatedly correlates with completion has its weight raised (never past max); S2 reads the
- * raised weight back (confidence rises); S3 reads the penalty back; runs are reversible; low sample
+ * raised weight back (verification score rises); S3 reads the penalty back; runs are reversible; low sample
  * does not tune; cross-tenant isolation holds.
  */
 import 'reflect-metadata';
@@ -75,7 +75,7 @@ async function main(): Promise<void> {
     const snapId = await insObj(A, 'Snapshot', { kind: 'photo' });
     await admin.query(`INSERT INTO links (tenant_id, from_object, to_object, relation) VALUES ($1,$2,$3,'references')`, [A, snapId, taskId]);
     const r0 = await verification.verify(A, taskId, scorer);
-    const conf0 = r0!.result.confidence;
+    const conf0 = r0!.result.verificationScore;
     check(r0!.result.verifiedState === 'verified', 'baseline: verified at default snapshot weight');
 
     // ── Seed feedback: marketing repeatedly ignored (≥ minSample); financial only 3 (low sample);
@@ -98,9 +98,9 @@ async function main(): Promise<void> {
     // low sample: financial (3 < minSample) must NOT be tuned.
     check(!run1.changes.some((c) => c.paramKey === 'financial'), 'low-sample domain (financial) NOT adjusted');
 
-    // ── S2 closes the loop: re-verify → confidence rises because the snapshot weight went up. ──
+    // ── S2 closes the loop: re-verify → verification score rises because the snapshot weight went up. ──
     const r1 = await verification.verify(A, taskId, scorer);
-    check(r1!.result.confidence > conf0, `S2 read back the raised weight (confidence ${conf0} → ${r1!.result.confidence})`);
+    check(r1!.result.verificationScore > conf0, `S2 read back the raised weight (verification score ${conf0} → ${r1!.result.verificationScore})`);
 
     // ── S3 closes the loop: the learned domain penalty is readable for the orchestrator. ──
     const penalties = await learning.getDomainPriorityPenalties(A);

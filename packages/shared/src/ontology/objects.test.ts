@@ -4,7 +4,7 @@ import {
   isMvpTaskType,
   isVerifiedState,
   isLinkRelation,
-  isConfidence,
+  isVerificationScore,
   MVP_OBJECT_TYPES,
   MVP_TASK_TYPES,
 } from './objects';
@@ -34,12 +34,12 @@ describe('ontology guards', () => {
     expect(isLinkRelation('marriedTo')).toBe(false);
   });
 
-  it('validates the confidence range [0,1]', () => {
-    expect(isConfidence(0)).toBe(true);
-    expect(isConfidence(0.76)).toBe(true);
-    expect(isConfidence(1)).toBe(true);
-    expect(isConfidence(1.2)).toBe(false);
-    expect(isConfidence(-0.1)).toBe(false);
-    expect(isConfidence(Number.NaN)).toBe(false);
+  it('validates the verificationScore range [0,1]', () => {
+    expect(isVerificationScore(0)).toBe(true);
+    expect(isVerificationScore(0.76)).toBe(true);
+    expect(isVerificationScore(1)).toBe(true);
+    expect(isVerificationScore(1.2)).toBe(false);
+    expect(isVerificationScore(-0.1)).toBe(false);
+    expect(isVerificationScore(Number.NaN)).toBe(false);
   });
 });

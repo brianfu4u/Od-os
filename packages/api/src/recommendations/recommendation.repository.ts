@@ -28,7 +28,7 @@ interface ObjRow {
   properties: Record<string, unknown>;
   verified_state: string | null;
   claimed_state: string | null;
-  confidence: string | null;
+  verification_score: string | null;
 }
 
 @Injectable()
@@ -41,7 +41,7 @@ export class RecommendationRepository {
   async gatherContext(tenantId: string, objectId: string): Promise<AgentContext | null> {
     return withTenant(tenantId, async (c) => {
       const objRes = await c.query<ObjRow>(
-        `SELECT id, type, properties, verified_state, claimed_state, confidence FROM objects WHERE id = $1`,
+        `SELECT id, type, properties, verified_state, claimed_state, verification_score FROM objects WHERE id = $1`,
         [objectId],
       );
       const o = objRes.rows[0];
@@ -70,7 +70,7 @@ export class RecommendationRepository {
           properties: o.properties ?? {},
           verifiedState: o.verified_state,
           claimedState: o.claimed_state,
-          confidence: o.confidence === null ? null : Number(o.confidence),
+          verificationScore: o.verification_score === null ? null : Number(o.verification_score),
         },
         alert,
         now: Date.now(),
@@ -88,7 +88,7 @@ export class RecommendationRepository {
     return withTenant(tenantId, async (c) => {
       const CANDIDATE_TYPES = ['Task', 'InventoryItem', 'Invoice', 'Payment', 'Claim', 'Review', 'Lead', 'Campaign', 'Equipment'];
       const objs = await c.query<ObjRow>(
-        `SELECT id, type, properties, verified_state, claimed_state, confidence
+        `SELECT id, type, properties, verified_state, claimed_state, verification_score
            FROM objects
           WHERE type = ANY($1) AND (properties->>'archived') IS DISTINCT FROM 'true'`,
         [CANDIDATE_TYPES],
@@ -130,7 +130,7 @@ export class RecommendationRepository {
           properties: o.properties ?? {},
           verifiedState: o.verified_state,
           claimedState: o.claimed_state,
-          confidence: o.confidence === null ? null : Number(o.confidence),
+          verificationScore: o.verification_score === null ? null : Number(o.verification_score),
         },
         alert: latestAlert.get(o.id) ?? null,
         related: o.type === 'Equipment' ? { usageScan: scannedEquipment.has(o.id) } : undefined,

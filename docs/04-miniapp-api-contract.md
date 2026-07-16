@@ -122,7 +122,7 @@ through these signed URLs (never a public path). In production the URL points at
 
 ### 3.4 Objects (task lifecycle)
 - `GET /objects?type=Task` — list (RLS-scoped). Also `type=Room|InventoryItem|Equipment|…`.
-- `GET /objects/:id` — one object (state triplet + confidence + properties).
+- `GET /objects/:id` — one object (state triplet + verification_score + properties).
 - `POST /objects` — create (e.g. a new turnover task).
 - `PATCH /objects/:id` — partial update; a changed `claimedState` emits `object.state.claimed`
   → auto-verification.

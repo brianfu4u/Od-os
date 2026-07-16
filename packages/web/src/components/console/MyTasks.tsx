@@ -107,7 +107,7 @@ export function MyTasks({ api, onPick }: { api: Api; onPick: (task: MyTaskSummar
                     )}
                     <span className={['rounded-full px-2 py-0.5 text-[10px]', VERIFY_STYLE[v] ?? VERIFY_STYLE.unverified].join(' ')}>
                       {t(`verify.${v}`)}
-                      {task.confidence != null ? ` · ${pct(task.confidence)}` : ''}
+                      {task.verificationScore != null ? ` · ${pct(task.verificationScore)}` : ''}
                     </span>
                   </div>
                 </div>

@@ -9,7 +9,7 @@ export interface AgentContext {
     properties: Record<string, unknown>;
     verifiedState: string | null;
     claimedState: string | null;
-    confidence: number | null;
+    verificationScore: number | null;
   };
   alert?: { id: string; triggered: string[]; severity: string; reason: string } | null;
   /** Optional cross-object signals the sweep can populate (undefined on the per-object event path). */
@@ -52,7 +52,7 @@ export class PatientFlowAgent implements DomainAgent {
         title: `${label(ctx)}: completion unverified (conflict)`,
         why: ctx.alert?.reason ?? 'Claimed done, but evidence conflicts (missing required / timing).',
         evidence: [{ kind: 'verification', ref: ctx.object.id, note: ctx.alert?.reason ?? 'conflict' }],
-        confidence: ctx.object.confidence ?? 0.5,
+        confidence: ctx.object.verificationScore ?? 0.5,
         proposedActions: [{ label: 'Request photo evidence', actionType: 'request_evidence', riskTier: 'low', needsApproval: false }],
         objectId: ctx.object.id,
         addresses: ctx.alert?.id,
@@ -68,7 +68,7 @@ export class PatientFlowAgent implements DomainAgent {
         title: `${label(ctx)}: overdue and still pending`,
         why: ctx.alert?.reason ?? 'Past its due time with required evidence not yet attached.',
         evidence: [{ kind: 'verification', ref: ctx.object.id, note: 'overdue + required missing' }],
-        confidence: ctx.object.confidence ?? 0.5,
+        confidence: ctx.object.verificationScore ?? 0.5,
         proposedActions: [{ label: 'Request evidence', actionType: 'request_evidence', riskTier: 'low', needsApproval: false }],
         objectId: ctx.object.id,
         addresses: ctx.alert?.id,

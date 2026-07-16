@@ -14,7 +14,7 @@ import { hhmm } from '../../lib/format';
  *   - NO accept / dismiss / snooze / approve / reject / shelve / decide control. A finding is
  *     surfaced for the manager to LOOK AT; acting on it (if at all) happens elsewhere (AssignPanel).
  *   - Each card shows only the neutral five-element evidence summary (who / when / claimed /
- *     submitted / systemObserved). No verdict, no confidence, no LLM text, nothing employee-facing.
+ *     submitted / systemObserved). No verdict, no verification score, no LLM text, nothing employee-facing.
  *   - Purely passive: the only interaction is a manual refetch (poll every 20s).
  *
  * The queue is read-time on the server (no stored table): a finding that no longer holds simply

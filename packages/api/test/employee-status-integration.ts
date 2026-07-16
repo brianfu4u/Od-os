@@ -8,7 +8,7 @@
  *   - silent: writing a manager-side verification_result onto the claim row does NOT change the
  *     employee-facing view — the AI verdict never flows back to the employee (原则 1 + 2).
  *   - projection: the EmployeeStatusView the employee receives contains ONLY claim keys — asserted at
- *     the KEY-NAME level (no verification_result / verification_confidence leak) (T-11 必改 6).
+ *     the KEY-NAME level (no verification_result / verification_score leak) (T-11 必改 6).
  *   - isolation: the caller's own id is server-resolved (staffId or dev staffHandle); no identity →
  *     403 (NoStaffIdentityError); cross-tenant cannot resolve another tenant's staff.
  */
@@ -80,7 +80,7 @@ async function main(): Promise<void> {
 
     // ── silent: a manager-side verdict must NOT alter the employee-facing view ──
     await admin.query(
-      `UPDATE employee_status_claims SET verification_result = 'inconsistent', verification_confidence = 0.91 WHERE id = $1`, [claimId],
+      `UPDATE employee_status_claims SET verification_result = 'inconsistent', verification_score = 0.91 WHERE id = $1`, [claimId],
     ).catch(() => { /* append-only trigger may block UPDATE — either way the verdict must not surface */ });
     const me2 = await repo.currentForCaller(A, ident(A, SA));
     check(me2.claimedStatus === 'busy', 'silent: employee view unchanged after a manager-side verdict write attempt');
@@ -89,7 +89,7 @@ async function main(): Promise<void> {
     const KEYS = Object.keys(me2).sort();
     const ALLOWED = ['claimedAt', 'claimedStatus', 'note'];
     check(JSON.stringify(KEYS) === JSON.stringify(ALLOWED), `projection: EmployeeStatusView keys are exactly ${ALLOWED.join(',')} (no verification leak)`);
-    check(!('verificationResult' in me2) && !('verification_result' in me2) && !('verificationConfidence' in me2), 'projection: no verification_result / verification_confidence key present');
+    check(!('verificationResult' in me2) && !('verification_result' in me2) && !('verificationScore' in me2), 'projection: no verification_result / verification_score key present');
 
     // ── isolation ──
     const byHandle = await repo.submitClaim(A, { subject: 'dev', tenantId: A, staffHandle: 'a_tech' }, 'idle', null, null);
@@ -129,7 +129,7 @@ async function main(): Promise<void> {
     const BOARD_KEYS = Object.keys(rowSA).sort();
     const BOARD_ALLOWED = ['claimedStatus', 'employeeId', 'employeeName', 'lastEventAt', 'secondsSinceLastEvent'].sort();
     check(JSON.stringify(BOARD_KEYS) === JSON.stringify(BOARD_ALLOWED), `board: row keys are exactly ${BOARD_ALLOWED.join(',')} (no verification/LLM leak)`);
-    check(!('verificationResult' in rowSA) && !('verificationConfidence' in rowSA), 'board: no verification_result / verification_confidence key present');
+    check(!('verificationResult' in rowSA) && !('verificationScore' in rowSA), 'board: no verification_result / verification_score key present');
 
     // read-only guarantee: calling the board twice writes NO event (unlike the attention queue's audit).
     const evBefore = await admin.query<{ n: string }>(`SELECT count(*)::text AS n FROM events WHERE tenant_id = $1`, [A]);

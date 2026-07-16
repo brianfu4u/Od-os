@@ -17,7 +17,7 @@ interface TaskRow {
   expected_state: string | null;
   claimed_state: string | null;
   verified_state: string | null;
-  confidence: string | null;
+  verification_score: string | null;
   updated_at: string;
   room_label: string | null;
   flow_state: string | null;
@@ -45,7 +45,7 @@ function mapTask(r: TaskRow): MyTaskSummary {
     expectedState: r.expected_state,
     claimedState: r.claimed_state,
     verifiedState: r.verified_state,
-    confidence: r.confidence === null ? null : Number(r.confidence),
+    verificationScore: r.verification_score === null ? null : Number(r.verification_score),
     dueBy: str(p.dueBy),
     updatedAt: new Date(r.updated_at).toISOString(),
     flowState,
@@ -66,7 +66,7 @@ export class TasksRepository {
       const staffId = await this.resolveStaffId(c, identity);
       if (!staffId) return [];
       const res = await c.query<TaskRow>(
-        `SELECT t.id, t.properties, t.expected_state, t.claimed_state, t.verified_state, t.confidence, t.updated_at,
+        `SELECT t.id, t.properties, t.expected_state, t.claimed_state, t.verified_state, t.verification_score, t.updated_at,
                 t.flow_state,
                 room.label AS room_label,
                 rej.payload AS rej_payload, rej.created_at AS rej_at, rej.total AS rej_total

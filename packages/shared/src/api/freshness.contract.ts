@@ -45,7 +45,7 @@ export interface EmployeeFreshness {
  * finding (i.e. "normal") so the manager sees everyone, not just those who surfaced in the queue.
  *
  * FIELD-PROJECTION GUARANTEE: read-only OBSERVATION + CLAIM only. It carries NO verificationResult,
- * NO verificationConfidence, NO LLM conclusion, and NO adjudication handle — the board never
+ * NO verificationScore, NO LLM conclusion, and NO adjudication handle — the board never
  * mutates world state and never exposes a verdict. Freshness never gates claimedStatus.
  */
 export interface StatusBoardRow {

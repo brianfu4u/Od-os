@@ -38,12 +38,12 @@ async function insObject(admin: Client, tenant: string, type: string, properties
 /** Insert a claim row with an explicit claimed_at so freshness/verification are controllable. */
 async function insClaim(
   admin: Client, tenant: string, employeeId: string, status: string,
-  claimedAtIso: string, verification?: { result?: string; confidence?: number },
+  claimedAtIso: string, verification?: { result?: string; verificationScore?: number },
 ): Promise<void> {
   await admin.query(
-    `INSERT INTO employee_status_claims (tenant_id, employee_id, claimed_status, claim_source, claimed_at, verification_result, verification_confidence)
+    `INSERT INTO employee_status_claims (tenant_id, employee_id, claimed_status, claim_source, claimed_at, verification_result, verification_score)
      VALUES ($1,$2,$3,'button',$4,$5,$6)`,
-    [tenant, employeeId, status, claimedAtIso, verification?.result ?? null, verification?.confidence ?? null],
+    [tenant, employeeId, status, claimedAtIso, verification?.result ?? null, verification?.verificationScore ?? null],
   );
 }
 
@@ -124,7 +124,7 @@ async function main(): Promise<void> {
 
     // ── low_confidence rule surfaces from the verification layer ──
     const lowc = await insObject(admin, A, 'Staff', { displayName: 'LowC A', staffHandle: 'lowc_a' }, 'idle');
-    await insClaim(admin, A, lowc, 'idle', iso(60), { result: 'inconsistent', confidence: 0.2 });
+    await insClaim(admin, A, lowc, 'idle', iso(60), { result: 'inconsistent', verificationScore: 0.2 });
     await insEvent(admin, A, lowc, 'employee.status.claimed', iso(60));
     const view4 = await service.queue(A);
     check(view4.items.some((i) => i.employeeId === lowc && i.kind === 'low_confidence'),

@@ -120,7 +120,7 @@ export function TranscriptPanel({
         {verdict ? (
           <span className={['rounded-full px-2 py-0.5', VERIFY_BADGE[verifyState]].join(' ')} title={t('transcript.verdict')}>
             {t('transcript.chain.verdict')}: {t(`verify.${verifyState}`)}
-            {verdict.confidence != null ? ` · ${t('transcript.verifyConfidence')} ${pct(verdict.confidence)}` : ''}
+            {verdict.verificationScore != null ? ` · ${t('transcript.verifyConfidence')} ${pct(verdict.verificationScore)}` : ''}
           </span>
         ) : (
           <span className="rounded bg-slate-800 px-1.5 py-0.5 text-slate-500">{t('transcript.noVerdict')}</span>

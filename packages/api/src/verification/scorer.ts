@@ -15,7 +15,7 @@ export interface ScoreInput {
   /**
    * S0-7: per-evidence-kind multiplier from the task's TaskSopConfig. Each supporting item's
    * strength is scaled by weights[item.type] (default 1.0 = neutral, pre-S0-7 behavior)
-   * before it is folded into confidence. Contradictions are NOT down-weighted — a conflict
+   * before it is folded into the verification score. Contradictions are NOT down-weighted — a conflict
    * signal must never be softened by a task-specific weight.
    */
   weights?: Record<string, number>;
@@ -51,7 +51,7 @@ const round3 = (n: number): number => Math.round(n * 1000) / 1000;
 
 /**
  * Deterministic, explainable scorer.
- * confidence starts at BASE_SELF_CLAIM for a matching claim, then each INDEPENDENT supporting
+ * verificationScore starts at BASE_SELF_CLAIM for a matching claim, then each INDEPENDENT supporting
  * item raises it toward 1 with diminishing returns: c ← c + (1−c)·strength.
  *
  * State machine — precedence (founder-frozen; §4 Room-3 must survive it):
@@ -62,7 +62,7 @@ const round3 = (n: number): number => Math.round(n * 1000) / 1000;
  *       required-missing→pending cap; a strong but non-required signal such as
  *       a QR scan does NOT clear it — only the actual required evidence does)
  *   4. required evidence missing, no anomaly        ⇒ pending (missing_required)
- *   5. confidence ≥ threshold (required satisfied, no conflict) ⇒ verified
+ *   5. verificationScore ≥ threshold (required satisfied, no conflict) ⇒ verified
  *   6. otherwise                                    ⇒ pending (low_confidence)
  *
  * §4 Room-3: claim-only + too-fast + snapshot missing ⇒ conflict @0.50 (rule 3). Once the
@@ -85,12 +85,12 @@ export class DeterministicScorer implements Scorer {
       return typeof w === 'number' && Number.isFinite(w) ? Math.max(0, Math.min(3, w)) : 1;
     };
 
-    let confidence = input.claimPresent && input.claimMatchesExpected ? clamp01(base) : 0;
+    let verificationScore = input.claimPresent && input.claimMatchesExpected ? clamp01(base) : 0;
     for (const e of supporting) {
       const effective = clamp01(e.strength * weightFor(e.type));
-      confidence = confidence + (1 - confidence) * effective;
+      verificationScore = verificationScore + (1 - verificationScore) * effective;
     }
-    confidence = clamp01(confidence);
+    verificationScore = clamp01(verificationScore);
 
     const requiredSatisfied = input.requiredMissing.length === 0;
     const explicitContradiction = contradicting.length > 0 || input.crossObjectContradiction;
@@ -109,7 +109,7 @@ export class DeterministicScorer implements Scorer {
     } else if (!requiredSatisfied) {
       verifiedState = 'pending';
       triggered.push('missing_required');
-    } else if (confidence >= input.threshold) {
+    } else if (verificationScore >= input.threshold) {
       verifiedState = 'verified';
     } else {
       verifiedState = 'pending';
@@ -118,8 +118,8 @@ export class DeterministicScorer implements Scorer {
 
     return {
       verifiedState,
-      confidence: round3(confidence),
-      reason: this.buildReason(verifiedState, confidence, supporting, contradicting, input),
+      verificationScore: round3(verificationScore),
+      reason: this.buildReason(verifiedState, verificationScore, supporting, contradicting, input),
       evidence: input.evidence,
       requiredMissing: input.requiredMissing,
       triggered,
@@ -128,12 +128,12 @@ export class DeterministicScorer implements Scorer {
 
   private buildReason(
     state: VerifiedState,
-    confidence: number,
+    verificationScore: number,
     supporting: EvidenceItem[],
     contradicting: EvidenceItem[],
     input: ScoreInput,
   ): string {
-    const parts: string[] = [`state=${state} confidence=${confidence.toFixed(2)}`];
+    const parts: string[] = [`state=${state} verificationScore=${verificationScore.toFixed(2)}`];
     if (supporting.length) {
       parts.push(`support: ${supporting.map((e) => `${e.type}(+${e.strength.toFixed(2)})`).join(', ')}`);
     }

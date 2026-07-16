@@ -27,7 +27,7 @@ export interface ManagerTaskRow {
   roomLabel: string | null;
   claimedState: string | null;
   verifiedState: string | null;
-  confidence: number | null;
+  verificationScore: number | null;
   dueBy: string | null;
   updatedAt: string;
   assignee: TaskAssignee | null;

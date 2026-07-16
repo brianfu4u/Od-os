@@ -6,7 +6,7 @@
  * things strictly separate:
  *   - transcript  → what STT heard (text + STT confidence). Fed to LLM1.
  *   - claim       → what LLM1 asserted (claimed_state). A CLAIM, not a verdict.
- *   - verdict     → the Task's verified_state + verification confidence, owned solely by the
+ *   - verdict     → the Task's verified_state + verification score, owned solely by the
  *                   deterministic cross-verification engine (S2). This is the ONLY "verified" source.
  * There is deliberately no path here that turns a transcript/STT confidence into a verified verdict.
  * Everything traces to a real backend field — nothing is fabricated (synthetic demo items are flagged).
@@ -101,8 +101,8 @@ export interface ClaimView {
 export interface VerdictView {
   /** verified | conflict | pending | unverified (from the Task; the only "verified" source). */
   verifiedState: string;
-  /** Verification confidence in [0,1] — distinct from STT confidence. */
-  confidence: number | null;
+  /** Verification score in [0,1] — distinct from STT confidence. */
+  verificationScore: number | null;
 }
 
 export interface TranscriptFeedItem {

@@ -14,7 +14,7 @@ interface ObjRow {
   properties: Record<string, unknown>;
   verifiedState: string | null;
   claimedState: string | null;
-  confidence: number | null;
+  verificationScore: number | null;
 }
 
 const VERIFY_STYLE: Record<string, string> = {
@@ -247,7 +247,7 @@ export function DomainDetail({ domain }: { domain: DomainKey }) {
                               <span className={['rounded-full px-2 py-0.5 text-[10px]', VERIFY_STYLE[l.verifiedState] ?? VERIFY_STYLE.unverified].join(' ')}>
                                 {t(`verify.${l.verifiedState}`)}
                               </span>
-                              <span className="tabular-nums text-[10px] text-slate-400">{pct(l.confidence)}</span>
+                              <span className="tabular-nums text-[10px] text-slate-400">{pct(l.verificationScore)}</span>
                               <span className="text-[10px] text-slate-600">{fmtTime(l.at)}</span>
                             </div>
                             {l.reason ? <p className="mt-0.5 text-[11px] text-slate-400">{l.reason}</p> : null}

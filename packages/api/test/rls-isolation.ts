@@ -131,7 +131,7 @@ async function main(): Promise<void> {
     await c.query('SET LOCAL ROLE clearview_app');
     await c.query("SELECT set_config('app.tenant_id', $1, true)", [A]);
     await c.query(
-      `INSERT INTO verification_ledger (tenant_id, object_id, verified_state, confidence)
+      `INSERT INTO verification_ledger (tenant_id, object_id, verified_state, verification_score)
        VALUES ($1, $2, 'verified', 0.9)`,
       [A, idX],
     );

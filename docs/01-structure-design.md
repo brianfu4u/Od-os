@@ -40,7 +40,7 @@
 ```
 expectedState / expectedBy   // 应该是什么、什么时候该完成(来自 SOP)
 claimedState  / claimedBy    // 谁声称它是什么(来自沟通)
-verifiedState / confidence   // 交叉验证后的真相 + 置信度
+verifiedState / verificationScore   // 交叉验证后的真相 + 验证分数
 ```
 
 **对象目录(按六大域):**
@@ -63,7 +63,7 @@ Task {
   links: { forVisit, assignedStaff, usesEquipment?, consumesInventory? },
   expectedState: "ready", expectedDurationMin: 6,
   claimedState: "ready", claimedBy: Communication#123, claimedAt: 09:20,
-  verifiedState: "conflict", confidence: 0.50,
+  verifiedState: "conflict", verificationScore: 0.50,
   requiredEvidence: ["snapshot"],           // 该任务类型必须的证据
   startedAt, dueBy, tags
 }
@@ -132,10 +132,10 @@ Communication {
 
 **验证状态:** `Verified 已验证` / `Conflict 冲突` / `Pending 待定(证据不足)` / `Unverified 未验证(仅有声称)`。
 
-**置信度模型(概念式):**
+**验证分数模型(概念式):**
 
 ```
-confidence = base
+verificationScore = base
   + Σ(evidence_weight × source_trust × recency)   // 佐证越多、越独立、越新 → 越高
   − conflict_penalty                               // 存在矛盾证据/状态
   − missing_required_penalty                       // 缺少该任务「必需证据」
