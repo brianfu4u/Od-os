@@ -75,6 +75,34 @@ export async function runHttpSmoke({
   const me = await meResp.json();
   check(me?.tenantId === tenant && me?.subject === 'staff', 'GET /auth/me returns the session identity');
 
+  // T-16: embedded-camera output goes straight to StoragePort + immutable event_log. The receipt is
+  // deliberately neutral: it acknowledges arrival and carries no verdict, object, or Agent output.
+  log('\nT-16 direct photo intake:');
+  const photoForm = new FormData();
+  const jpeg = new Blob(
+    [new Uint8Array([0xff, 0xd8, 0xff, 0xda, 0x00, 0x03, 0x01, 0x11, 0x22, 0xff, 0xd9])],
+    { type: 'image/jpeg' },
+  );
+  photoForm.append('file', jpeg, 'capture.jpg');
+  photoForm.append('terminalId', 'smoke-ipad-1');
+  photoForm.append('seq', '1');
+  photoForm.append('occurredAt', new Date().toISOString());
+  const photoResponse = await fetch(`${base}/evidence/photo`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${login.token}` },
+    body: photoForm,
+  });
+  const photoReceipt = await photoResponse.json();
+  check(photoResponse.status === 201, `POST /evidence/photo → 201 (got ${photoResponse.status})`);
+  check(
+    photoReceipt?.eventType === 'evidence.photo.received' && !!photoReceipt?.eventId,
+    'photo receipt is a neutral evidence.photo.received event',
+  );
+  check(
+    !('verifiedState' in photoReceipt) && !('verificationScore' in photoReceipt) && !('objectId' in photoReceipt),
+    'photo receipt carries no verdict or ontology-object mutation',
+  );
+
   // P5: the staging manager login is gated OFF by default (no STAGING_LOGIN_ENABLED) → 404, so it is
   // never exposed unless explicitly turned on.
   const stagingOff = await fetch(`${base}/auth/manager/staging-login`, {

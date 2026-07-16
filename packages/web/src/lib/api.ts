@@ -27,6 +27,8 @@ import type {
   OntologyObject,
   OpsSummary,
   OverviewResult,
+  PhotoEvidenceMetadata,
+  PhotoEvidenceReceipt,
   RecommendationRecord,
   RecommendationStatus,
   OperatingTempo,
@@ -309,6 +311,21 @@ export function makeApi(auth?: string | ApiAuth) {
       if (opts?.linkTo) form.append('linkTo', opts.linkTo);
       if (opts?.kind) form.append('kind', opts.kind);
       return json(await cfetch(`${API_BASE}/uploads`, { method: 'POST', headers: authHeaders(), body: form }));
+    },
+
+    /**
+     * T-16 neutral photo intake. The response only acknowledges event_log receipt; it is not a
+     * verification result and this call does not attach the image to an ontology object.
+     */
+    async uploadPhoto(file: File, metadata: PhotoEvidenceMetadata): Promise<PhotoEvidenceReceipt> {
+      const form = new FormData();
+      form.append('file', file);
+      if (metadata.terminalId) form.append('terminalId', metadata.terminalId);
+      if (metadata.seq !== undefined) form.append('seq', String(metadata.seq));
+      if (metadata.occurredAt) form.append('occurredAt', metadata.occurredAt);
+      return json(
+        await cfetch(`${API_BASE}/evidence/photo`, { method: 'POST', headers: authHeaders(), body: form }),
+      );
     },
 
     async verify(objectId: string): Promise<VerificationResult> {
