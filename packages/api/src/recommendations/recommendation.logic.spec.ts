@@ -13,7 +13,7 @@ import type { RecommendationCandidate } from '@clearview/shared';
 
 function ctx(over: Partial<AgentContext['object']>, alert?: AgentContext['alert']): AgentContext {
   return {
-    object: { id: 'o1', type: 'Task', properties: {}, verifiedState: null, claimedState: null, confidence: null, ...over },
+    object: { id: 'o1', type: 'Task', properties: {}, verifiedState: null, claimedState: null, verificationScore: null, ...over },
     alert: alert ?? null,
     now: Date.now(),
   };
@@ -22,7 +22,7 @@ function ctx(over: Partial<AgentContext['object']>, alert?: AgentContext['alert'
 describe('domain agents', () => {
   it('patient-flow fires on a conflicted turnover task', () => {
     const out = new PatientFlowAgent().propose(
-      ctx({ properties: { taskType: 'room_turnover', label: 'Room 3' }, verifiedState: 'conflict', confidence: 0.5 }, {
+      ctx({ properties: { taskType: 'room_turnover', label: 'Room 3' }, verifiedState: 'conflict', verificationScore: 0.5 }, {
         id: 'a1',
         triggered: ['conflict'],
         severity: 'high',
@@ -60,7 +60,7 @@ describe('domain agents — financial / marketing / equipment (S3+)', () => {
     extra: { object?: Partial<AgentContext['object']>; related?: AgentContext['related'] } = {},
   ): AgentContext {
     return {
-      object: { id: 'x', type, properties, verifiedState: null, claimedState: null, confidence: null, ...(extra.object ?? {}) },
+      object: { id: 'x', type, properties, verifiedState: null, claimedState: null, verificationScore: null, ...(extra.object ?? {}) },
       alert: null,
       related: extra.related,
       now,

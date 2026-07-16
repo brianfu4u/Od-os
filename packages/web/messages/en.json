@@ -305,7 +305,7 @@
     "model": "Model",
     "language": "Language",
     "sttConfidence": "STT confidence",
-    "verifyConfidence": "Verification confidence",
+    "verifyConfidence": "Verification score",
     "claim": "What the system heard (a claim, not a verdict)",
     "verdict": "Cross-verification verdict (the only \"verified\" source)",
     "noClaim": "No claim formed",

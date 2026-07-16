@@ -106,7 +106,7 @@ A **generic object store** (not per-type tables). Per-type fields live in
 `properties` (JSONB); only the state triplet is promoted to columns.
 
 - **`objects`** — `id, tenant_id, type, properties (jsonb)`, the **state triplet**
-  `expected_state / claimed_state / verified_state + confidence`, and timestamps.
+  `expected_state / claimed_state / verified_state + verification_score`, and timestamps.
   Supports the 8 MVP types (Task, Communication, Document, Snapshot, Verification,
   Staff, Room, InventoryItem) and the wider ontology.
 - **`links`** — `from_object → to_object` with a `relation` (assignedTo, partOf,
@@ -277,7 +277,7 @@ size/type rejection; cross-tenant isolation.
 ## S2 — cross-verification engine (the core asset)
 
 Reconciles a **claim** (a Task's `claimed_state`) against **independent evidence** into a
-`verified_state` + `confidence`, appended to the immutable `verification_ledger`, reflected
+`verified_state` + `verification_score`, appended to the immutable `verification_ledger`, reflected
 onto the object, and surfaced live. **Deterministic + explainable** (auditable, testable);
 an LLM scorer is a pluggable seam behind the same `Scorer` interface.
 
@@ -285,15 +285,15 @@ an LLM scorer is a pluggable seam behind the same `Scorer` interface.
   document attachments (matched against `requiredEvidence`), corroborating communications,
   SOP **timing** (too-fast vs `expectedDurationMin`), and cross-object consistency — each
   normalized to `{ type, supports, strength, detail }` with a returned breakdown/reason.
-- **Score:** `confidence` starts at 0.50 for a matching self-claim (an unevidenced claim is a
+- **Score:** `verification_score` starts at 0.50 for a matching self-claim (an unevidenced claim is a
   coin-flip; the S0-7-frozen base); each independent supporting item raises it toward 1
   (diminishing returns). Precedence: an explicit contradiction — **or** a timing anomaly while
   the required evidence is still unsatisfied — ⇒ `conflict` (this **overrides** the
   required-missing→`pending` cap); required evidence missing with no anomaly ⇒ `pending`;
-  satisfying the required evidence resolves the anomaly, and `confidence ≥ threshold` ⇒ `verified`.
+  satisfying the required evidence resolves the anomaly, and `verification_score ≥ threshold` ⇒ `verified`.
 - **State machine:** `unverified → pending → verified | conflict`, recomputed each run.
 - **Triggers → Alert objects** on conflict / low-confidence / missing-required / overdue.
-- **Writes** (one `withTenant()` tx): update `objects.verified_state` + `confidence`, append
+- **Writes** (one `withTenant()` tx): update `objects.verified_state` + `verification_score`, append
   a `verification_ledger` row, emit **`object.state.verified`** (+ `alert.raised`), publish to
   SSE. **Event-driven:** uploading/reporting evidence for a Task auto re-scores it (this is
   what flips conflict→verified when the photo arrives). Also `POST /objects/:id/verify` and
@@ -431,11 +431,11 @@ learning only tunes numbers (reversibly, auditably), it never silently acts.
 - **Closed loop:** S2 (`verify`) reads the learned per-task weights/threshold back — layered
   `DEFAULT_SOP < tenant-learned < per-object` — and S3 (orchestrator) subtracts the learned domain
   penalty from a cue's rank score. (The scorer's per-kind multiplier now allows >1 so learned
-  up-weighting actually raises confidence; a single item is still capped at a full-strength signal.)
+  up-weighting actually raises the verification score; a single item is still capped at a full-strength signal.)
 - **Params live in a mutable per-tenant `learning_params` table**; the two ledgers are immutable.
 
 Tested (unit + integration): feedback append-only + tenant-isolated; ignored domain → downgrade;
-evidence → weight up (never past max); low sample → no change; **S2 confidence rises** after a learned
+evidence → weight up (never past max); low sample → no change; **S2 verification score rises** after a learned
 up-weight; **S3 reads the penalty back**; rollback restores the prior params; deterministic (same
 input → same output). **TODO(later):** LLM scorer / generative re-ranking; cross-store anonymized
 benchmarks (needs multi-tenant aggregation + compliance); real external integrations; deployment.

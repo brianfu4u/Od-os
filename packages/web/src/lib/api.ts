@@ -156,7 +156,7 @@ export function makeApi(auth?: string | ApiAuth) {
      * T-08 · EMPLOYEE status submission (CLAIM layer). POST /employee-status/claims.
      *
      * NEVER rejected/blocked for a valid five-state, and the response is the employee-facing
-     * `EmployeeStatusView` — CLAIM ONLY. It carries no verificationResult / confidence / verdict, and
+     * `EmployeeStatusView` — CLAIM ONLY. It carries no verificationResult / verificationScore / verdict, and
      * no AI/evaluative feedback ever flows back to the employee. The button tap takes effect at once.
      */
     async submitStatusClaim(input: SubmitStatusClaimInput): Promise<EmployeeStatusView> {

@@ -76,12 +76,12 @@ describe('buildFeed — scoped records → provenance & the moat', () => {
     // claim carries only claimedState; taskType lives on classification → must still show.
     const r = rec('doc-1', { text: '3号房已备好', status: 'done', at: '2026-07-11T01:00:00.000Z' }, {
       llm: { claim: { claimedState: 'ready' }, classification: { taskType: 'room_turnover' } },
-      verdict: { verifiedState: 'verified', confidence: 0.855 },
+      verdict: { verifiedState: 'verified', verificationScore: 0.855 },
     });
     const [item] = buildFeed([r]);
     expect(item!.transcript.status).toBe('done');
     expect(item!.claim).toEqual({ taskType: 'room_turnover', claimedState: 'ready' });
-    expect(item!.verdict).toEqual({ verifiedState: 'verified', confidence: 0.855 });
+    expect(item!.verdict).toEqual({ verifiedState: 'verified', verificationScore: 0.855 });
   });
 
   it('prefers claim.taskType when present', () => {

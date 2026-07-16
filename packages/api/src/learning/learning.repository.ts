@@ -47,7 +47,7 @@ export class LearningRepository {
 
       const current: CurrentResolvers = {
         weight: (t, k) => taskVal.get(t)?.weights?.[k] ?? defaultWeight(t, k),
-        threshold: (t) => taskVal.get(t)?.threshold ?? getSopConfig(t).confidenceThreshold,
+        threshold: (t) => taskVal.get(t)?.threshold ?? getSopConfig(t).verificationScoreThreshold,
         penalty: (d) => penaltyVal.get(d) ?? 0,
       };
 

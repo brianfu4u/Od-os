@@ -2,7 +2,7 @@
 
 ## Goal & scope
 
-**Goal — the core asset.** Given a **claim** (a report/communication asserting an object reached a state), reconcile it against **independent evidence** to produce a **verification**: a `verified_state` + `confidence`, appended to the immutable `verification_ledger`, reflected onto the object, and surfaced live on the command center. Fire **triggers** (Alerts) on conflict / low-confidence / missing-required / overdue. All inputs already exist: structured reports (S1-2), QR-scan + attachment evidence links (S1-2/S1-3), SOP timing, cross-object consistency.
+**Goal — the core asset.** Given a **claim** (a report/communication asserting an object reached a state), reconcile it against **independent evidence** to produce a **verification**: a `verified_state` + `verification_score`, appended to the immutable `verification_ledger`, reflected onto the object, and surfaced live on the command center. Fire **triggers** (Alerts) on conflict / low-confidence / missing-required / overdue. All inputs already exist: structured reports (S1-2), QR-scan + attachment evidence links (S1-2/S1-3), SOP timing, cross-object consistency.
 
 **In scope:** the verification engine for the 5 MVP task types (room_turnover, pretest_done, dilation_started, inventory_reorder, equipment_calibration); scoring; state machine; triggers; ledger writes; events + SSE.
 
@@ -21,9 +21,9 @@ The engine is **event-driven**, re-entrant, and idempotent.
 - `evidence.attached` — new evidence linked to an object → **re-score** (this is what flips conflict→verified when a photo arrives later).
 - A periodic **sweep** — for time-based triggers (object past `expectedBy`, required evidence missing past deadline).
 
-**A claim** = { object, claimedState, claimedBy (Communication/Staff), claimedAt }. The engine resolves the object's task type (`properties.taskType`) to load its SOP config: `expectedState`, `expectedDurationMin`, `requiredEvidence`, and a `confidenceThreshold` (from S0-7 config; sensible defaults until frozen).
+**A claim** = { object, claimedState, claimedBy (Communication/Staff), claimedAt }. The engine resolves the object's task type (`properties.taskType`) to load its SOP config: `expectedState`, `expectedDurationMin`, `requiredEvidence`, and a `verificationScoreThreshold` (from S0-7 config; sensible defaults until frozen).
 
-**Re-scoring rule:** a later run supersedes the object's current `verified_state`/`confidence` but **never mutates prior ledger rows** — it appends a new one. The ledger is the append-only history; the object holds the latest.
+**Re-scoring rule:** a later run supersedes the object's current `verified_state`/`verification_score` but **never mutates prior ledger rows** — it appends a new one. The ledger is the append-only history; the object holds the latest.
 
 ## Evidence model (sources & how fetched)
 
@@ -45,7 +45,7 @@ Normalize each into `{ type, supports|contradicts, weight, sourceTrust, recency 
 
 **Score (deterministic, explainable):**
 ```
-confidence = clamp(
+verificationScore = clamp(
     base
   + Σ( weight × sourceTrust × recency )   over corroborating evidence
   − conflictPenalty            (contradictory evidence or cross-object contradiction)
@@ -63,13 +63,13 @@ Indicative weights (tune in config): QR scan 0.45 · matching snapshot 0.30 · c
 
 **Triggers (create an Alert object + event) when:**
 - verdict = **conflict**;
-- confidence **below** the task type threshold;
+- verification score **below** the task type threshold;
 - **required evidence missing** past its deadline (sweep);
 - object past **`expectedBy`** still not verified (sweep).
 
 Alerts carry {objectId, reason, evidence summary, severity}. (Recommendations that act on Alerts = S3; here we only raise them.)
 
-**Ledger writes (the asset):** on each (re)scoring, **append** one `verification_ledger` row `{ tenantId, objectId, verifiedState, confidence, evidence(jsonb), reason }` — immutable, per S0-2 (append-only enforced). Then update the object's `verified_state` + `confidence` (the state triplet's verified slot) and emit **`object.state.verified`**; publish via SSE so the command center updates live. All within one `withTenant()` transaction; publish after commit.
+**Ledger writes (the asset):** on each (re)scoring, **append** one `verification_ledger` row `{ tenantId, objectId, verifiedState, verificationScore, evidence(jsonb), reason }` — immutable, per S0-2 (append-only enforced). Then update the object's `verified_state` + `verification_score` (the state triplet's verified slot) and emit **`object.state.verified`**; publish via SSE so the command center updates live. All within one `withTenant()` transaction; publish after commit.
 
 ## Worked example, tests & DoD
 
@@ -92,7 +92,7 @@ Alerts carry {objectId, reason, evidence summary, severity}. (Recommendations th
 **Definition of Done**
 - [ ] Deterministic, explainable scorer with a required-evidence gate and per-task-type thresholds.
 - [ ] QR scan + attachment + corroborating comm + timing + cross-object consistency all factored, each with a returned breakdown/reason.
-- [ ] Verdict appended to `verification_ledger` (immutable); object `verified_state`+`confidence` updated; `object.state.verified` emitted; SSE live.
+- [ ] Verdict appended to `verification_ledger` (immutable); object `verified_state`+`verification_score` updated; `object.state.verified` emitted; SSE live.
 - [ ] Triggers raise Alerts on conflict / low-confidence / missing-required / overdue.
 - [ ] Re-scoring on new evidence works (Room-3 story test passes); idempotent; `withTenant()` only; cross-tenant + CI green.
 - [ ] LLM scorer left as a clean pluggable seam (not implemented here).

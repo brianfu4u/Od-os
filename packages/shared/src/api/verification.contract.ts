@@ -2,7 +2,7 @@ import type { VerifiedState } from '../ontology/objects';
 
 /**
  * S2 cross-verification contract. A deterministic, explainable scorer reconciles a claim
- * against independent evidence → a VerificationResult (verified_state + confidence + reason
+ * against independent evidence → a VerificationResult (verified_state + verificationScore + reason
  * + evidence breakdown), appended immutably to the verification ledger. LLM scoring is a
  * later pluggable seam behind the same Scorer interface.
  */
@@ -23,7 +23,7 @@ export interface EvidenceItem {
 
 export interface VerificationResult {
   verifiedState: VerifiedState;
-  confidence: number;
+  verificationScore: number;
   /** Human-readable explanation built from the evidence breakdown. */
   reason: string;
   evidence: EvidenceItem[];
@@ -39,9 +39,9 @@ export interface VerificationResult {
  * S0-7 adds two calibration knobs so the freeze can be tuned per task type without an
  * engine change:
  *  - `evidenceWeights`: per-evidence-kind multiplier applied to each item's normalized
- *    strength before it is folded into confidence. 1.0 = neutral (pre-S0-7 behavior).
+ *    strength before it is folded into verificationScore. 1.0 = neutral (pre-S0-7 behavior).
  *    Lets a task type say "a snapshot is worth more than a document" for THIS task.
- *  - `baseSelfClaim`: the confidence a lone, matching self-claim carries BEFORE any
+ *  - `baseSelfClaim`: the verificationScore a lone, matching self-claim carries BEFORE any
  *    independent evidence. Defaults to the calibrated global (DEFAULT_BASE_SELF_CLAIM).
  *    See sop-config.ts for the base-0.50-vs-0.76 decision that this field exposes.
  */
@@ -50,9 +50,9 @@ export interface TaskSopConfig {
   expectedState: string;
   expectedDurationMin?: number;
   requiredEvidence: string[];
-  confidenceThreshold: number;
+  verificationScoreThreshold: number;
   /** Per-evidence-kind strength multiplier (default 1.0 per kind). */
   evidenceWeights?: Record<string, number>;
-  /** Base confidence for a lone matching self-claim (default DEFAULT_BASE_SELF_CLAIM). */
+  /** Base verificationScore for a lone matching self-claim (default DEFAULT_BASE_SELF_CLAIM). */
   baseSelfClaim?: number;
 }

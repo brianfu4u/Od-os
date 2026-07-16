@@ -30,12 +30,12 @@ async function insObject(
   type: string,
   properties: Record<string, unknown>,
   verified: string | null = null,
-  confidence: number | null = null,
+  verificationScore: number | null = null,
 ): Promise<string> {
   const res = await admin.query<{ id: string }>(
-    `INSERT INTO objects (tenant_id, type, properties, verified_state, confidence)
+    `INSERT INTO objects (tenant_id, type, properties, verified_state, verification_score)
      VALUES ($1, $2, $3::jsonb, $4, $5) RETURNING id`,
-    [tenant, type, JSON.stringify(properties), verified, confidence],
+    [tenant, type, JSON.stringify(properties), verified, verificationScore],
   );
   return res.rows[0]!.id;
 }
@@ -79,12 +79,12 @@ async function main(): Promise<void> {
 
     // Ledger: conflict earlier, verified later → newest-first must surface the verified row.
     await admin.query(
-      `INSERT INTO verification_ledger (tenant_id, object_id, verified_state, confidence, evidence, reason, created_at)
+      `INSERT INTO verification_ledger (tenant_id, object_id, verified_state, verification_score, evidence, reason, created_at)
        VALUES ($1,$2,'conflict',0.5,$3::jsonb,'missing snapshot', '2026-07-07T09:00:00Z')`,
       [T, task, JSON.stringify([{ kind: 'communication' }])],
     );
     await admin.query(
-      `INSERT INTO verification_ledger (tenant_id, object_id, verified_state, confidence, evidence, reason, created_at)
+      `INSERT INTO verification_ledger (tenant_id, object_id, verified_state, verification_score, evidence, reason, created_at)
        VALUES ($1,$2,'verified',0.855,$3::jsonb,'snapshot matches SOP', '2026-07-07T09:05:00Z')`,
       [T, task, JSON.stringify([{ kind: 'communication' }, { kind: 'snapshot' }])],
     );

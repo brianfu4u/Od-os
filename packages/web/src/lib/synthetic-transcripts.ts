@@ -25,7 +25,7 @@ export function syntheticFeedItems(now: number = Date.now()): TranscriptFeedItem
         at: iso(1),
       }),
       claim: { taskType: 'room_turnover', claimedState: 'ready' },
-      verdict: { verifiedState: 'conflict', confidence: 0.5 },
+      verdict: { verifiedState: 'conflict', verificationScore: 0.5 },
     },
     {
       id: 'synthetic-low',

@@ -26,7 +26,7 @@ function readCode(rel: string): string {
 // employee UI code. Word-boundaried where needed so neutral tokens can't false-positive.
 const FORBIDDEN = [
   /verificationResult/i,
-  /verificationConfidence/i,
+  /verificationScore/i,
   /\bconfidence\b/i,
   /\bverdict\b/i,
   /consistency/i,
@@ -52,7 +52,7 @@ describe('T-08 · employee surfaces never render a verification / confidence / v
       'utf8',
     );
     expect(contract).toMatch(/verificationResult/);
-    expect(contract).toMatch(/verificationConfidence/);
+    expect(contract).toMatch(/verificationScore/);
     expect(contract).toMatch(/ManagerStatusClaimView/);
   });
 });

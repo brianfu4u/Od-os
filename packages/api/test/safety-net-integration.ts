@@ -60,7 +60,7 @@ async function main(): Promise<void> {
     // ② Timeline is tenant-isolated.
     const objId = (
       await admin.query<{ id: string }>(
-        `INSERT INTO objects (tenant_id, type, properties, claimed_state, verified_state, confidence)
+        `INSERT INTO objects (tenant_id, type, properties, claimed_state, verified_state, verification_score)
          VALUES ($1, 'Task', $2::jsonb, 'ready', 'conflict', 0.5) RETURNING id`,
         [A, JSON.stringify({ taskType: 'room_turnover', label: 'Room 3' })],
       )
@@ -70,7 +70,7 @@ async function main(): Promise<void> {
       [A, objId],
     );
     await admin.query(
-      `INSERT INTO verification_ledger (tenant_id, object_id, verified_state, confidence, evidence, reason)
+      `INSERT INTO verification_ledger (tenant_id, object_id, verified_state, verification_score, evidence, reason)
        VALUES ($1, $2, 'conflict', 0.5, '[]'::jsonb, 'seeded')`,
       [A, objId],
     );

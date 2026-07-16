@@ -44,7 +44,7 @@ interface BoardRow {
  *      (the scan_id/claim_id hard-link convention: payload jsonb references the ledger row so a
  *      future Correlator can precisely trace a claim event back to its rich row — zero migration).
  *
- * verification_result / verification_confidence are NEVER written here — they are filled later by a
+ * verification_result / verification_score are NEVER written here — they are filled later by a
  * silent background check, are manager-side reference only, and never flow back to the employee.
  */
 @Injectable()
@@ -102,7 +102,7 @@ export class EmployeeStatusRepository {
   /**
    * The caller's own CURRENT status view (CLAIM layer only). Reads the latest claim row for the
    * caller's Staff object. Returns nulls when the employee has never claimed a status. NEVER returns
-   * verification_result / verification_confidence — the field-projection guarantee (T-11).
+   * verification_result / verification_score — the field-projection guarantee (T-11).
    */
   async currentForCaller(
     tenantId: string,
@@ -135,7 +135,7 @@ export class EmployeeStatusRepository {
    * CLAIM layer (claimed_state on the Staff object) with the read-time freshness OBSERVATION
    * (employee_freshness view). READ-ONLY: opens no write, mutates no world_state / claimed_status /
    * flow_state, and appends NO event — unlike the attention queue this is a pure snapshot with no
-   * audit side-effect. NEVER selects verification_result / verification_confidence (field-projection
+   * audit side-effect. NEVER selects verification_result / verification_score (field-projection
    * guarantee). RLS scopes it to the caller's tenant. Employees with no valid event yet have
    * last_event_at = null; consumers treat null freshness as "stale".
    */

@@ -4,7 +4,7 @@
 
 创始人已确认。这是喂给 S2 交叉验证引擎的真实配置,替换占位默认值;同时内含 Q1(a) 的 per-task evidenceWeights。
 
-**集成方式:** 落入 TaskSopConfig(按租户可覆盖)。全局默认(base / sourceTrust / penalties)沿用 S2;每个任务可覆盖 requiredEvidence / confidenceThreshold / evidenceWeights / 时间参数。
+**集成方式:** 落入 TaskSopConfig(按租户可覆盖)。全局默认(base / sourceTrust / penalties)沿用 S2;每个任务可覆盖 requiredEvidence / verificationScoreThreshold / evidenceWeights / 时间参数。
 
 **★ requiredEvidence 语义(对 S2 门槛的一点小增强):** 它是一个组的列表——组与组之间是 AND,组内是 OR。每个组都至少有 1 项证据才算满足;任一组未满足则最多判 pending。
 - 例:[[snapshot]] = 必须有照片。
@@ -29,14 +29,14 @@ taskTypes:
     expectedState: ready
     expectedDurationMin: 6
     requiredEvidence: [[snapshot]]
-    confidenceThreshold: 0.85
+    verificationScoreThreshold: 0.85
     evidenceWeights: { snapshot: 0.35, qr_scan: 0.25, document: 0.20, corroborating_comm: 0.15, cross_object: 0.15, timing_within_sop: 0.10 }
 
   - taskType: pretest_done         # 预检完成
     expectedState: done
     expectedDurationMin: 8
     requiredEvidence: [[snapshot, qr_scan]]      # 结果截图 或 扫患者码
-    confidenceThreshold: 0.80
+    verificationScoreThreshold: 0.80
     evidenceWeights: { qr_scan: 0.30, snapshot: 0.30, document: 0.20, corroborating_comm: 0.15, cross_object: 0.15, timing_within_sop: 0.10 }
 
   - taskType: dilation_started     # 散瞳开始
@@ -44,14 +44,14 @@ taskTypes:
     expectedDurationMin: null                    # 即时事件;记开始时刻
     dilationWaitMin: 25                          # 散瞳等待时长;驱动下一阶段触发
     requiredEvidence: [[qr_scan]]                # 扫患者就诊码
-    confidenceThreshold: 0.80
+    verificationScoreThreshold: 0.80
     evidenceWeights: { qr_scan: 0.45, snapshot: 0.20, document: 0.10, corroborating_comm: 0.15, cross_object: 0.15, timing_within_sop: 0.10 }
 
   - taskType: inventory_reorder    # 库存补货
     expectedState: ordered
     dueBy: end_of_day
     requiredEvidence: [[document, snapshot]]     # 补货单 或 货架照片
-    confidenceThreshold: 0.85
+    verificationScoreThreshold: 0.85
     evidenceWeights: { document: 0.30, snapshot: 0.25, qr_scan: 0.15, corroborating_comm: 0.15, cross_object: 0.15, timing_within_sop: 0.05 }
 
   - taskType: equipment_calibration  # 设备校准
@@ -59,7 +59,7 @@ taskTypes:
     expectedDurationMin: 15
     calibrationValidDays: 30                     # 超期后扫码使用会被标记
     requiredEvidence: [[document], [qr_scan]]    # 校准记录 且 扫设备标签
-    confidenceThreshold: 0.90
+    verificationScoreThreshold: 0.90
     evidenceWeights: { document: 0.30, qr_scan: 0.30, snapshot: 0.15, corroborating_comm: 0.15, cross_object: 0.15, timing_within_sop: 0.10 }
 ```
 

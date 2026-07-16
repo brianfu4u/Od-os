@@ -305,7 +305,7 @@
     "model": "模型",
     "language": "语言",
     "sttConfidence": "STT 置信度",
-    "verifyConfidence": "核实置信度",
+    "verifyConfidence": "验证分数",
     "claim": "系统听懂的主张(声称,未裁定)",
     "verdict": "交叉验证判决(仅此为「已核实」来源)",
     "noClaim": "未形成主张",

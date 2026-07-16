@@ -49,7 +49,7 @@ export interface SubmitStatusClaimInput {
  * EMPLOYEE-FACING projection of the current status.
  *
  * FIELD-PROJECTION GUARANTEE (T-11 asserts this at the key-name level): this shape carries the
- * CLAIM layer ONLY. It MUST NOT contain `verificationResult`, `verificationConfidence`, any LLM
+ * CLAIM layer ONLY. It MUST NOT contain `verificationResult`, `verificationScore`, any LLM
  * conclusion, or any internal judgment field.
  */
 export interface EmployeeStatusView {
@@ -68,7 +68,7 @@ export interface ManagerStatusClaimView {
   claimSource: ClaimSource | null;
   /** Consistency verdict; null until a silent background check runs. Manager-side only. */
   verificationResult: StatusConsistencyResult | null;
-  verificationConfidence: number | null;
+  verificationScore: number | null;
   note: string | null;
   claimedAt: string | null;
 }

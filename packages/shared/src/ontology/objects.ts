@@ -83,15 +83,15 @@ export type LinkRelation = (typeof LINK_RELATIONS)[number];
  * that makes cross-verification a first-class property of the ontology.
  *   expected = what the SOP says it should be
  *   claimed  = what a communication asserts it is
- *   verified = the cross-verified truth + confidence
+ *   verified = the cross-verified truth + verificationScore
  */
 export interface StateTriplet {
   expectedState: string | null;
   claimedState: string | null;
   /** Typically a VerifiedState, kept as string for generic objects. */
   verifiedState: string | null;
-  /** Confidence in [0, 1]. */
-  confidence: number | null;
+  /** Verification score in [0, 1]. */
+  verificationScore: number | null;
 }
 
 /** A row in the generic `objects` table. */
@@ -148,7 +148,7 @@ export function isLinkRelation(r: string): r is LinkRelation {
   return (LINK_RELATIONS as readonly string[]).includes(r);
 }
 
-/** Confidence must be a finite number within [0, 1]. */
-export function isConfidence(n: number): boolean {
+/** Verification score must be a finite number within [0, 1]. */
+export function isVerificationScore(n: number): boolean {
   return Number.isFinite(n) && n >= 0 && n <= 1;
 }

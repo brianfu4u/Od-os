@@ -17,7 +17,7 @@ import { validateSubmitStatusClaim, normalizeStatusClaim } from './employee-stat
  *   - A well-formed five-state claim is NEVER rejected/blocked and NEVER triggers rework. There is
  *     no "被拒 / 待审核 / 异常" response path.
  *   - The employee-facing responses carry the CLAIM layer ONLY. `EmployeeStatusView` has no
- *     verification_result / verification_confidence / LLM field — the field-projection guarantee
+ *     verification_result / verification_score / LLM field — the field-projection guarantee
  *     (asserted at the key-name level in T-11).
  */
 @UseGuards(TenantGuard, RolesGuard)

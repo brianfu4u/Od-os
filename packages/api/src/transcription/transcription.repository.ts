@@ -98,10 +98,10 @@ export class TranscriptionRepository {
         verdict_conf: string | null;
       }>(
         `SELECT d.id, d.properties, d.updated_at,
-                v.verified_state AS verdict_state, v.confidence AS verdict_conf
+                v.verified_state AS verdict_state, v.verification_score AS verdict_conf
            FROM objects d
            LEFT JOIN LATERAL (
-             SELECT t.verified_state, t.confidence
+             SELECT t.verified_state, t.verification_score
                FROM objects t
               WHERE t.type = 'Task' AND t.properties->>'claimedBy' = d.id::text
               ORDER BY t.created_at DESC
@@ -127,7 +127,7 @@ export class TranscriptionRepository {
           at,
           properties: p,
           verdict: r.verdict_state
-            ? { verifiedState: r.verdict_state, confidence: r.verdict_conf === null ? null : Number(r.verdict_conf) }
+            ? { verifiedState: r.verdict_state, verificationScore: r.verdict_conf === null ? null : Number(r.verdict_conf) }
             : null,
         };
       });

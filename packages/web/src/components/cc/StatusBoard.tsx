@@ -14,7 +14,7 @@ import { hhmm } from '../../lib/format';
  * is deliberately NOT a decision surface:
  *   - it renders NO three-state verdict button (approve / reject / shelve / decide) — the single
  *     source of adjudication stays in AssignPanel;
- *   - it exposes NO verification / confidence / LLM field (the endpoint never sends one);
+ *   - it exposes NO verification / verification-score / LLM field (the endpoint never sends one);
  *   - it never mutates world state — every action here is a passive refetch.
  *
  * The server (RolesGuard manager + RLS) is the real boundary; this UI hiding is cosmetic only.

@@ -60,8 +60,8 @@ async function insRoomAndTurnover(admin: Client, tenant: string): Promise<{ room
 }
 
 async function readObj(admin: Client, id: string) {
-  const r = await admin.query<{ claimed_state: string | null; verified_state: string | null; confidence: string | null; properties: Record<string, unknown> }>(
-    `SELECT claimed_state, verified_state, confidence, properties FROM objects WHERE id=$1`,
+  const r = await admin.query<{ claimed_state: string | null; verified_state: string | null; verification_score: string | null; properties: Record<string, unknown> }>(
+    `SELECT claimed_state, verified_state, verification_score, properties FROM objects WHERE id=$1`,
     [id],
   );
   return r.rows[0]!;
@@ -119,7 +119,7 @@ async function main(): Promise<void> {
     const afterClaim = await readObj(admin, taskC);
     check(afterClaim.claimed_state === 'ready', 'B: report → LLM1 set claimed_state=ready');
     check(afterClaim.verified_state === 'conflict', 'B: deterministic engine returned CONFLICT (too-fast + missing snapshot)');
-    check(near(afterClaim.confidence, 0.5), `B: conflict confidence ≈ 0.50 (got ${afterClaim.confidence})`);
+    check(near(afterClaim.verification_score, 0.5), `B: conflict verification score ≈ 0.50 (got ${afterClaim.verification_score})`);
 
     const ledger = await admin.query<{ n: number }>(`SELECT count(*)::int AS n FROM verification_ledger WHERE object_id=$1`, [taskC]);
     check((ledger.rows[0]?.n ?? 0) >= 1, 'B: verification_ledger row written by the deterministic engine (not LLM1)');
@@ -133,7 +133,7 @@ async function main(): Promise<void> {
     await admin.query(`INSERT INTO links (tenant_id, from_object, to_object, relation) VALUES ($1,$2,$3,'references')`, [C, snap.rows[0]!.id, taskC]);
     const reVerified = await verification.verifyObject(C, taskC);
     check(reVerified?.verifiedState === 'verified', 'B: snapshot attached → re-verify → VERIFIED');
-    check(near(reVerified?.confidence ?? 0, 0.855), `B: verified confidence ≈ 0.855 (got ${reVerified?.confidence})`);
+    check(near(reVerified?.verificationScore ?? 0, 0.855), `B: verified verification score ≈ 0.855 (got ${reVerified?.verificationScore})`);
 
     // ── Part C: TENANT ISOLATION ──────────────────────────────────────────────────────────
     const sumB = await listenerB.summarize(B, { hours: 24 });
