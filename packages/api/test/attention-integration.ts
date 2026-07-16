@@ -4,12 +4,13 @@
  * Proves the manager-side, read-only queue contract end to end at the repository/service boundary:
  *   - generation: an on_duty employee with no recent valid event surfaces a `silence` item whose
  *     evidenceSummary states neutral facts (T-07).
- *   - audit ALWAYS logs, NEVER dedups: two reads → two `attention.candidate.generated` events for
- *     the same finding (the write layer must never drop a fact); dedup is display-only.
+ *   - GET is a PURE READ (P1-5): N reads of the queue write ZERO events of ANY kind — the former
+ *     T-10 read-time `attention.candidate.generated` audit was intentionally removed (write-only,
+ *     nothing consumed it, and a GET must never mutate).
  *   - display dedup + dequeue: the manager view collapses same employee+kind to one item; once the
  *     employee's fact no longer holds (fresh activity), the item disappears on the next read.
  *   - never touches world state: generating the queue does NOT change claimed_state and produces NO
- *     employee-visible event (only the manager-actor audit event exists).
+ *     event whatsoever (no employee-visible event, no manager-side audit event).
  *   - isolation: candidates for tenant A never include tenant B's staff (RLS).
  */
 import 'reflect-metadata';
@@ -96,21 +97,23 @@ async function main(): Promise<void> {
     // ── isolation ──
     check(!view1.items.some((i) => i.employeeId === silentB), 'isolation: tenant B silent staff never appears in tenant A queue');
 
-    // ── audit ALWAYS logs, NEVER dedups: run the queue AGAIN, expect a SECOND audit event ──
+    // ── P1-5: GET is a pure read — read N times, expect ZERO written events for the finding ──
     await service.queue(A);
+    await service.queue(A);
+    await service.queue(A); // 4 reads total (view1 + 3) — a stored-write model would show ≥4 rows
     const auditCount = await admin.query<{ n: string }>(
       `SELECT count(*) AS n FROM events WHERE object_id = $1 AND event_type = 'attention.candidate.generated'`,
       [silent],
     );
-    check(Number(auditCount.rows[0]!.n) === 2, 'T-10: two reads → two audit events (write layer NEVER dedups)');
-    const auditActor = await admin.query<{ actor: string }>(
-      `SELECT actor FROM events WHERE object_id = $1 AND event_type = 'attention.candidate.generated' LIMIT 1`, [silent],
-    );
-    check(auditActor.rows[0]!.actor === 'manager', 'T-10: audit event actor is manager-side (never an employee-visible event)');
+    check(Number(auditCount.rows[0]!.n) === 0, 'P1-5: N reads → 0 attention.candidate.generated events (read path writes nothing)');
 
-    // ── never touches world state ──
+    // ── never touches world state: NO event of ANY kind is written by reading the queue ──
     const staffRow = await admin.query<{ claimed_state: string | null }>(`SELECT claimed_state FROM objects WHERE id = $1`, [silent]);
     check(staffRow.rows[0]!.claimed_state === 'on_duty', 'world-state: generation does NOT change claimed_state');
+    const anyWrite = await admin.query<{ n: string }>(
+      `SELECT count(*) AS n FROM events WHERE object_id = $1 AND event_type LIKE 'attention.%'`, [silent],
+    );
+    check(Number(anyWrite.rows[0]!.n) === 0, 'world-state: reading the queue produces NO attention.* event at all');
     const empVisible = await admin.query<{ n: string }>(
       `SELECT count(*) AS n FROM events WHERE object_id = $1 AND actor = 'employee'`, [silent],
     );
