@@ -118,6 +118,32 @@ export function resolveCorsOptions(env: Env = process.env): CorsResolved {
   return { origin: isProd(env) ? false : true, ...base };
 }
 
+export interface ExternalProvidersResolved {
+  /** true ⇒ external LLM/STT adapters may be selected as usual; false ⇒ force the local fallbacks. */
+  enabled: boolean;
+  /** machine-readable reason for the boot log (never contains any key/secret). */
+  reason: 'enabled' | 'compliance-off';
+}
+
+/**
+ * P1-6-c · compliance downgrade switch for EXTERNAL data processors (DeepSeek LLM1, OpenAI Whisper).
+ *
+ * When `COMPLIANCE_EXTERNAL_PROVIDERS=off`, the boot factories MUST skip the external adapters even
+ * if their API keys are present, and fall back to the in-process paths that ship no data off-box:
+ * the deterministic HeuristicListener (LLM1) and the NullTranscriber (STT declines rather than
+ * fabricating text). This lets an operator disable external processing for compliance WITHOUT having
+ * to delete keys. Absent / any other value keeps today's behaviour (external allowed when keyed).
+ *
+ * Pure + env-injectable (no side effects, no key ever read here) so it is deterministically testable.
+ * This is a SELECTION gate only: it never changes data flow, world state, or the claim/verification
+ * layering — it only decides which engine runs, and the disabled state is strictly more conservative.
+ */
+export function resolveExternalProviders(env: Env = process.env): ExternalProvidersResolved {
+  const flag = (env.COMPLIANCE_EXTERNAL_PROVIDERS ?? '').trim().toLowerCase();
+  if (flag === 'off') return { enabled: false, reason: 'compliance-off' };
+  return { enabled: true, reason: 'enabled' };
+}
+
 /**
  * Gate 3 (pure): manager-auth config problems in production. Empty array ⇒ OK.
  *  - Manager seed is OPTIONAL. But if it is switched on (MANAGER_SEED_LOGIN present), it must be

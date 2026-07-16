@@ -8,18 +8,26 @@ import { LlmListenerRepository } from './listener.repository';
 import { HeuristicListener } from './heuristic-listener';
 import { DeepSeekListener } from './deepseek-listener';
 import { LLM_LISTENER, type LlmListenerPort } from './listener.types';
+import { resolveExternalProviders } from '../config/security';
 
 /**
  * Select the active adapter at boot. DeepSeek when DEEPSEEK_API_KEY is set (unless explicitly
  * pinned to heuristic via LLM_LISTENER=heuristic); otherwise the deterministic HeuristicListener —
  * so the layer runs keyless in dev/CI/tests and degrades gracefully when DeepSeek is unavailable.
- * The API key is read from the environment only and never logged.
+ *
+ * P1-6-c: the compliance downgrade switch (COMPLIANCE_EXTERNAL_PROVIDERS=off) overrides everything —
+ * even with a key present we pin to HeuristicListener so NO transcript leaves the box. The API key is
+ * read from the environment only and never logged.
  */
 export function makeListener(): LlmListenerPort {
   const heuristic = new HeuristicListener();
+  const external = resolveExternalProviders();
   const key = process.env.DEEPSEEK_API_KEY;
-  const adapter = key && process.env.LLM_LISTENER !== 'heuristic' ? new DeepSeekListener(key, heuristic) : heuristic;
-  new Logger('ListenerModule').log(`listen adapter selected: ${adapter.name}`);
+  const useDeepSeek = external.enabled && !!key && process.env.LLM_LISTENER !== 'heuristic';
+  const adapter = useDeepSeek ? new DeepSeekListener(key as string, heuristic) : heuristic;
+  const log = new Logger('ListenerModule');
+  if (!external.enabled) log.warn('compliance downgrade: external LLM disabled (COMPLIANCE_EXTERNAL_PROVIDERS=off) — pinned to heuristic');
+  log.log(`listen adapter selected: ${adapter.name}`);
   return adapter;
 }
 
