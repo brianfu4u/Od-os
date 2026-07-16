@@ -212,6 +212,16 @@ export async function runHttpSmoke({
   const summary = await (await fetch(`${base}/listen/summary?hours=24`, { headers: { Authorization: `Bearer ${listenMgr.token}` } })).json();
   check(typeof summary?.text === 'string' && (summary.count ?? 0) >= 1, `GET /listen/summary → ${summary?.count} events summarized (manager)`);
 
+  // P1-6-b: POST /retention/sweep is MANAGER-ONLY (redacts sensitive raw content past the window).
+  // A staff session must be 403; a manager session returns a numeric { redacted } count. With the
+  // default 30-day window and freshly-seeded data, nothing is old enough yet → redacted === 0.
+  const staffOnRetention = await fetch(`${base}/retention/sweep`, { method: 'POST', headers: { Authorization: `Bearer ${login.token}` } });
+  check(staffOnRetention.status === 403, `P1-6-b: staff session on manager-only /retention/sweep → 403 (got ${staffOnRetention.status})`);
+  const retResp = await fetch(`${base}/retention/sweep`, { method: 'POST', headers: LH });
+  const ret = await retResp.json();
+  check(retResp.status === 201 && typeof ret?.redacted === 'number', `P1-6-b: manager POST /retention/sweep → { redacted: ${ret?.redacted} }`);
+  check(ret?.redacted === 0, 'P1-6-b: fresh data is within the retention window → 0 redacted');
+
   // §4 resolution: upload the required snapshot → evidence hook re-verifies → verified.
   const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
   const form = new FormData();

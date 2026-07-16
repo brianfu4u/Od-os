@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { PoolClient } from 'pg';
 import type { ScanAck, SubmitScanInput, VisitLinkStatus } from '@clearview/shared';
 import { withTenant } from '../database/tenant-context';
+import { SensitivePayloadsRepository } from '../retention/sensitive-payloads.repository';
 import type { SessionIdentity } from '../auth/session.types';
 
 /** The caller has no resolvable Staff object in this tenant. */
@@ -44,6 +45,8 @@ interface ScanRow {
  */
 @Injectable()
 export class ScansRepository {
+  constructor(private readonly sensitive: SensitivePayloadsRepository) {}
+
   async submitScan(
     tenantId: string,
     identity: SessionIdentity | undefined,
@@ -77,6 +80,13 @@ export class ScansRepository {
       );
       const scanId = inserted.rows[0]!.id;
       const scannedAt = inserted.rows[0]!.scanned_at;
+
+      // P1-6-b population: mirror the raw patient identifier + free-text note into the redactable
+      // side-store, in the SAME transaction (atomic with the append-only scan row). The patient_scans
+      // columns are left untouched; this store is what the retention sweep later redacts. Null/empty
+      // values are skipped by mirrorText.
+      await this.sensitive.mirrorText(c, tenantId, 'patient_scans', scanId, 'patient_code', key.patientCode);
+      await this.sensitive.mirrorText(c, tenantId, 'patient_scans', scanId, 'optional_note', input.optionalNote ?? null);
 
       // Append-only NEUTRAL event, hard-linking the scan row via payload.scanId (Correlator anchor).
       await c.query(
