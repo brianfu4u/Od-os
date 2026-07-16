@@ -188,15 +188,31 @@ export class LlmListenerRepository {
     });
   }
 
-  /** Recent analyses for a summary window (what LLM1 HEARD), optionally filtered by domain. */
+  /**
+   * Recent analyses for a summary window (what LLM1 HEARD), optionally filtered by domain.
+   *
+   * P1-6-d · D-choice-1 read-path closure: the sensitive `input` text is resolved from the redactable
+   * side-store (live payloads only), NOT from the append-only llm_analysis_log.input source column
+   * (KI-001). A swept/redacted or never-mirrored payload yields no text, so an expired analysis'
+   * raw input is not surfaced by /listen/summary; the source column is never read for it. The join is
+   * a LATERAL to the newest live side-store row per log, keeping this a single query (no N+1).
+   */
   gatherAnalyses(tenantId: string, hours: number, domain?: string): Promise<SummaryInputEvent[]> {
     return withTenant(tenantId, async (c) => {
       const res = await c.query<{ created_at: string; event_type: string | null; domain: string | null; task_type: string | null; input: string | null }>(
-        `SELECT created_at, event_type, domain, task_type, input
-           FROM llm_analysis_log
-          WHERE created_at > now() - make_interval(hours => $1)
-            AND ($2::text IS NULL OR domain = $2)
-          ORDER BY created_at DESC
+        `SELECT l.created_at, l.event_type, l.domain, l.task_type, sp.content AS input
+           FROM llm_analysis_log l
+           LEFT JOIN LATERAL (
+             SELECT content
+               FROM sensitive_payloads
+              WHERE tenant_id = l.tenant_id AND source_table = 'llm_analysis_log'
+                AND source_id = l.id AND field = 'input' AND redacted_at IS NULL
+              ORDER BY created_at DESC
+              LIMIT 1
+           ) sp ON true
+          WHERE l.created_at > now() - make_interval(hours => $1)
+            AND ($2::text IS NULL OR l.domain = $2)
+          ORDER BY l.created_at DESC
           LIMIT 500`,
         [hours, domain ?? null],
       );
