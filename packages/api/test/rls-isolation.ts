@@ -142,6 +142,95 @@ async function main(): Promise<void> {
       check(true, 'verification_ledger UPDATE is denied for the app role');
     }
     await c.query('ROLLBACK');
+
+    // ── P1-6-a · sensitive_payloads redactable side-store ──
+    // 9) cross-tenant isolation: tenant B cannot see tenant A's sensitive payload.
+    await c.query('BEGIN');
+    await c.query('SET LOCAL ROLE clearview_app');
+    await c.query("SELECT set_config('app.tenant_id', $1, true)", [A]);
+    const sp = await c.query<{ id: string }>(
+      `INSERT INTO sensitive_payloads (tenant_id, source_table, source_id, field, content)
+       VALUES ($1, 'llm_analysis_log', $2, 'input', 'raw sensitive text') RETURNING id`,
+      [A, idX],
+    );
+    const spId = sp.rows[0]!.id;
+    await c.query('COMMIT');
+
+    await c.query('BEGIN');
+    await c.query('SET LOCAL ROLE clearview_app');
+    await c.query("SELECT set_config('app.tenant_id', $1, true)", [B]);
+    const seenSpByB = await c.query<{ n: number }>(
+      'SELECT count(*)::int AS n FROM sensitive_payloads WHERE id = $1',
+      [spId],
+    );
+    check(seenSpByB.rows[0]!.n === 0, 'sensitive_payloads: tenant B cannot see tenant A payload (RLS)');
+    await c.query('ROLLBACK');
+
+    // 10) a well-formed redaction succeeds: content nulled, redacted_at stamped.
+    await c.query('BEGIN');
+    await c.query('SET LOCAL ROLE clearview_app');
+    await c.query("SELECT set_config('app.tenant_id', $1, true)", [A]);
+    await c.query(
+      `UPDATE sensitive_payloads SET content = NULL, content_jsonb = NULL, redacted_at = now() WHERE id = $1`,
+      [spId],
+    );
+    const after = await c.query<{ content: string | null; redacted_at: string | null }>(
+      'SELECT content, redacted_at FROM sensitive_payloads WHERE id = $1',
+      [spId],
+    );
+    check(
+      after.rows[0]!.content === null && after.rows[0]!.redacted_at !== null,
+      'sensitive_payloads: a well-formed redaction nulls content and stamps redacted_at',
+    );
+    await c.query('COMMIT');
+
+    // 11) editing content to a NEW value is rejected (redact-only, not editable).
+    await c.query('BEGIN');
+    await c.query('SET LOCAL ROLE clearview_app');
+    await c.query("SELECT set_config('app.tenant_id', $1, true)", [A]);
+    const sp2 = await c.query<{ id: string }>(
+      `INSERT INTO sensitive_payloads (tenant_id, source_table, source_id, field, content)
+       VALUES ($1, 'patient_scans', $2, 'patient_code', 'PT-123') RETURNING id`,
+      [A, idX],
+    );
+    const sp2Id = sp2.rows[0]!.id;
+    try {
+      await c.query(`UPDATE sensitive_payloads SET content = 'PT-999' WHERE id = $1`, [sp2Id]);
+      check(false, 'sensitive_payloads: editing content to a new value is rejected');
+    } catch (err) {
+      check(/redact-only|redaction/.test((err as Error).message), 'sensitive_payloads: editing content to a new value is rejected');
+    }
+    await c.query('ROLLBACK');
+
+    // 12) DELETE is rejected. Defense in depth: the app role has NO DELETE grant (permission denied),
+    // and even the owner is blocked by the redact-only trigger. Either rejection is acceptable.
+    await c.query('BEGIN');
+    await c.query('SET LOCAL ROLE clearview_app');
+    await c.query("SELECT set_config('app.tenant_id', $1, true)", [A]);
+    try {
+      await c.query(`DELETE FROM sensitive_payloads WHERE id = $1`, [spId]);
+      check(false, 'sensitive_payloads: DELETE is rejected (redact-only)');
+    } catch (err) {
+      check(/redact-only|not allowed|permission denied/.test((err as Error).message), 'sensitive_payloads: DELETE is rejected (redact-only)');
+    }
+    await c.query('ROLLBACK');
+
+    // 13) un-redacting (clearing redacted_at back to NULL) is rejected.
+    await c.query('BEGIN');
+    await c.query('SET LOCAL ROLE clearview_app');
+    await c.query("SELECT set_config('app.tenant_id', $1, true)", [A]);
+    try {
+      await c.query(`UPDATE sensitive_payloads SET redacted_at = NULL WHERE id = $1`, [spId]);
+      check(false, 'sensitive_payloads: un-redacting is rejected');
+    } catch (err) {
+      check(/redact-only|redaction/.test((err as Error).message), 'sensitive_payloads: un-redacting is rejected');
+    }
+    await c.query('ROLLBACK');
+
+    // cleanup the payload rows we committed (as owner, bypassing the redact-only trigger via session_replication_role).
+    await c.query("SET session_replication_role = 'replica'");
+    await c.query('DELETE FROM sensitive_payloads WHERE id = ANY($1::uuid[])', [[spId, sp2Id]]);
+    await c.query("SET session_replication_role = 'origin'");
   } finally {
     // cleanup: no committed events/ledger rows reference these objects.
     await c.query('DELETE FROM objects WHERE id = ANY($1::uuid[])', [[idX, idY]]);
