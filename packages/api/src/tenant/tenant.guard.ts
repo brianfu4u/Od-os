@@ -7,6 +7,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { SessionService } from '../auth/session.service';
+import { SseTicketService } from '../auth/sse-ticket.service';
 import type { SessionIdentity } from '../auth/session.types';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -31,15 +32,15 @@ export interface TenantRequest {
 }
 
 /**
- * Extracts an opaque session token from (in order): `Authorization: Bearer <t>`, a `?session=<t>`
- * query param (for EventSource/SSE, which cannot set headers — a bearer credential in the query is
- * fine, unlike a self-reported identity), or the `cv_session` cookie.
+ * Extracts an opaque session token from (in order): `Authorization: Bearer <t>` or the `cv_session`
+ * cookie. It deliberately does NOT read a token from the URL query string anymore (P0-2 sub-issue 3):
+ * URLs leak into logs/history/Referer, so a long-lived bearer token must never travel there.
+ * EventSource/SSE (which cannot set headers) uses a short-lived single-use ?ticket= instead — handled
+ * separately in the guard via SseTicketService.
  */
 export function extractSessionToken(req: TenantRequest): string | undefined {
   const authz = req.header('authorization');
   if (authz && /^Bearer\s+/i.test(authz)) return authz.replace(/^Bearer\s+/i, '').trim();
-  const q = req.query?.session;
-  if (typeof q === 'string' && q) return q;
   const cookie = req.header('cookie');
   if (cookie) {
     const m = /(?:^|;\s*)cv_session=([^;]+)/.exec(cookie);
@@ -61,10 +62,25 @@ export function extractSessionToken(req: TenantRequest): string | undefined {
  */
 @Injectable()
 export class TenantGuard implements CanActivate {
-  constructor(@Optional() private readonly sessions?: SessionService) {}
+  constructor(
+    @Optional() private readonly sessions?: SessionService,
+    @Optional() private readonly tickets?: SseTicketService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<TenantRequest>();
+
+    // 0) SSE ticket (single-use, ~60s). EventSource can't set headers, so an already-authenticated
+    //    caller mints a ticket at POST /auth/sse-ticket and connects with ?ticket=. The ticket is
+    //    consumed (burned) here; a missing/expired/reused ticket is rejected.
+    const ticket = typeof req.query?.ticket === 'string' ? req.query.ticket : undefined;
+    if (ticket) {
+      const identity = this.tickets ? this.tickets.consume(ticket) : null;
+      if (!identity) throw new UnauthorizedException('Invalid or expired SSE ticket.');
+      req.auth = identity;
+      req.tenantId = identity.tenantId;
+      return true;
+    }
 
     // 1) Session-first (all environments).
     const token = extractSessionToken(req);

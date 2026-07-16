@@ -13,7 +13,8 @@ export interface SessionIdentity {
 }
 
 export interface SessionRow {
-  token: string;
+  /** SHA-256 hash of the opaque token (the raw token is never persisted — P0-2). */
+  token_hash: string;
   subject: 'staff' | 'manager';
   tenant_id: string;
   staff_id: string | null;

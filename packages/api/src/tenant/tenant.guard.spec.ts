@@ -43,13 +43,41 @@ function ctx(r: TenantRequest): ExecutionContext {
 function sessions(map: Record<string, SessionIdentity>) {
   return { resolve: async (t: string) => map[t] ?? null } as unknown as ConstructorParameters<typeof TenantGuard>[0];
 }
+// Fake SseTicketService: single-use, resolves only tickets in the map (deleted on consume).
+function tickets(map: Record<string, SessionIdentity>) {
+  return {
+    consume: (t: string) => {
+      const id = map[t] ?? null;
+      delete map[t];
+      return id;
+    },
+  } as unknown as ConstructorParameters<typeof TenantGuard>[1];
+}
 
 describe('extractSessionToken', () => {
-  it('reads Bearer, ?session, and cv_session cookie', () => {
+  it('reads Bearer and cv_session cookie, and NO LONGER reads a ?session query token', () => {
     expect(extractSessionToken(req({ headers: { authorization: 'Bearer abc123' } }))).toBe('abc123');
-    expect(extractSessionToken(req({ query: { session: 'q-tok' } }))).toBe('q-tok');
     expect(extractSessionToken(req({ headers: { cookie: 'foo=1; cv_session=cook%2Dtok; bar=2' } }))).toBe('cook-tok');
+    // P0-2 sub-issue 3: a raw token in the URL query is no longer honored (SSE uses ?ticket= instead).
+    expect(extractSessionToken(req({ query: { session: 'q-tok' } }))).toBeUndefined();
     expect(extractSessionToken(req({}))).toBeUndefined();
+  });
+});
+
+describe('TenantGuard — SSE ticket path (P0-2)', () => {
+  it('accepts a fresh ticket exactly once and rejects reuse / unknown tickets', async () => {
+    process.env.NODE_ENV = 'production';
+    const map = { 'good-ticket': { subject: 'manager' as const, tenantId: A, role: 'manager' } };
+    const guard = new TenantGuard(sessions({}), tickets(map));
+
+    const r = req({ query: { ticket: 'good-ticket' } });
+    expect(await guard.canActivate(ctx(r))).toBe(true);
+    expect(r.tenantId).toBe(A);
+
+    // Single-use: the same ticket is now burned → 401.
+    await expect(guard.canActivate(ctx(req({ query: { ticket: 'good-ticket' } })))).rejects.toMatchObject({ status: 401 });
+    // Unknown ticket → 401.
+    await expect(guard.canActivate(ctx(req({ query: { ticket: 'nope' } })))).rejects.toMatchObject({ status: 401 });
   });
 });
 
