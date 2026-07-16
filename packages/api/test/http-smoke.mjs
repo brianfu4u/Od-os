@@ -177,16 +177,40 @@ export async function runHttpSmoke({
   log('\nLLM1 listen layer:');
   const commObj = await (await fetch(`${base}/objects/${report.communicationId}`, { headers: H })).json();
   check(!!commObj?.properties?.llm?.classification, 'report auto-annotated by LLM1 (async, non-blocking)');
+
+  // P1-6-0: /listen/* is MANAGER-ONLY (it exposes raw analyzed text). Prove a STAFF session is 403
+  // BEFORE using a manager session for the real calls. This is a pure authorization boundary.
+  const staffOnListenSummary = await fetch(`${base}/listen/summary?hours=24`, {
+    headers: { Authorization: `Bearer ${login.token}` },
+  });
+  check(staffOnListenSummary.status === 403, `P1-6-0: staff session on manager-only /listen/summary → 403 (got ${staffOnListenSummary.status})`);
+  const staffOnListenAnalyze = await fetch(`${base}/listen/analyze`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${login.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ communicationId: report.communicationId }),
+  });
+  check(staffOnListenAnalyze.status === 403, `P1-6-0: staff session on manager-only /listen/analyze → 403 (got ${staffOnListenAnalyze.status})`);
+
+  // The real listener calls run under a MANAGER session.
+  const listenMgr = await (
+    await fetch(`${base}/auth/manager/dev-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tenantId: tenant, login: 'smoke-mgr-listen', displayName: 'Smoke Mgr Listen' }),
+    })
+  ).json();
+  check(!!listenMgr.token, 'POST /auth/manager/dev-login issues a manager session (listen layer)');
+  const LH = { Authorization: `Bearer ${listenMgr.token}`, 'Content-Type': 'application/json' };
   const ana = await (
     await fetch(`${base}/listen/analyze`, {
       method: 'POST',
-      headers: { ...H, 'Content-Type': 'application/json' },
+      headers: LH,
       body: JSON.stringify({ communicationId: report.communicationId }),
     })
   ).json();
-  check(!!ana?.classification?.domain, 'POST /listen/analyze returns a classification');
-  const summary = await (await fetch(`${base}/listen/summary?hours=24`, { headers: H })).json();
-  check(typeof summary?.text === 'string' && (summary.count ?? 0) >= 1, `GET /listen/summary → ${summary?.count} events summarized`);
+  check(!!ana?.classification?.domain, 'POST /listen/analyze returns a classification (manager)');
+  const summary = await (await fetch(`${base}/listen/summary?hours=24`, { headers: { Authorization: `Bearer ${listenMgr.token}` } })).json();
+  check(typeof summary?.text === 'string' && (summary.count ?? 0) >= 1, `GET /listen/summary → ${summary?.count} events summarized (manager)`);
 
   // §4 resolution: upload the required snapshot → evidence hook re-verifies → verified.
   const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
