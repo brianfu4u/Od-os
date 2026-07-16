@@ -12,6 +12,7 @@ import { AudioRecorder } from './AudioRecorder';
 import { MyTasks } from './MyTasks';
 import { EmployeeStatusBar } from './EmployeeStatusBar';
 import { ScanEntry } from './ScanEntry';
+import { PhotoIntake } from './PhotoIntake';
 import { fetchMe, serverLogout, staffDevLogin, staffStagingLogin, type Session } from '../../lib/session';
 
 interface ObjRow {
@@ -537,6 +538,17 @@ export function StaffConsole() {
             </button>
           </div>
         </form>
+
+        {/* T-16 · neutral, direct-to-event_log camera intake. No object link, LLM, or verdict. */}
+        {api ? (
+          <PhotoIntake
+            api={api}
+            onComplete={(receipt) =>
+              pushLog(true, `${t('console.photoIntake.title')} → ${receipt.eventId.slice(0, 8)}`)
+            }
+            onError={(message) => pushLog(false, `${t('console.photoIntake.title')}: ${message}`)}
+          />
+        ) : null}
 
         {/* photo / evidence — real rear camera on phones */}
         <form className={CARD} onSubmit={(e) => void submitUpload(e)}>

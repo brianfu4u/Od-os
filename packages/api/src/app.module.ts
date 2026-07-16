@@ -20,6 +20,7 @@ import { EmployeeStatusModule } from './employee-status/employee-status.module';
 import { ScansModule } from './scans/scans.module';
 import { AttentionModule } from './attention/attention.module';
 import { RetentionModule } from './retention/retention.module';
+import { EvidenceModule } from './evidence/evidence.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { RetentionModule } from './retention/retention.module';
     ScansModule,
     AttentionModule,
     RetentionModule,
+    EvidenceModule,
   ],
   controllers: [HealthController],
 })

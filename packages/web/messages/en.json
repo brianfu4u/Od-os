@@ -229,6 +229,23 @@
       "take": "Take / choose photo",
       "hint": "Snap a photo as evidence (opens the rear camera on phones); optionally linked to the subject.",
       "chosen": "Chosen: {name}"
+    },
+    "photoIntake": {
+      "title": "Direct photo intake (T-16)",
+      "hint": "Captures one neutral arrival event. It does not link, interpret, verify, or alert.",
+      "start": "Open rear camera",
+      "starting": "Starting camera…",
+      "ready": "Frame the scene, then capture",
+      "capture": "Capture and send now",
+      "cancel": "Close camera",
+      "uploading": "Sending directly…",
+      "received": "Received · event {id}",
+      "again": "Take another photo",
+      "retry": "Try camera again",
+      "unsupported": "This browser cannot open an embedded camera.",
+      "denied": "Camera permission was denied.",
+      "error": "The photo could not be captured or sent.",
+      "privacy": "In-page capture: the image is held only in memory and is never saved to the photo album."
     }
   },
   "login": {
