@@ -27,7 +27,8 @@ export interface ManagerTaskRow {
   roomLabel: string | null;
   claimedState: string | null;
   verifiedState: string | null;
-  confidence: number | null;
+  /** Deterministic S2 verdict score in [0,1] (RULE score, not a probability). Renamed from `confidence` in P1-4. */
+  verificationScore: number | null;
   dueBy: string | null;
   updatedAt: string;
   assignee: TaskAssignee | null;

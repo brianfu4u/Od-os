@@ -51,7 +51,7 @@ export function LedgerPanel({ ledger }: { ledger: LedgerEntrySummary[] }) {
                     </span>
                   ))}
                   <span className={['ml-auto rounded-full px-2 py-0.5 text-[10px]', meta.style].join(' ')}>
-                    {t(`ledger.states.${e.verifiedState}`)} · {pct(e.confidence)}
+                    {t(`ledger.states.${e.verifiedState}`)} · {pct(e.verificationScore)}
                   </span>
                 </div>
               </div>

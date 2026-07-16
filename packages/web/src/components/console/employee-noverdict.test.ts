@@ -27,6 +27,7 @@ function readCode(rel: string): string {
 const FORBIDDEN = [
   /verificationResult/i,
   /verificationConfidence/i,
+  /verificationScore/i, // P1-4: the S2 verdict score (renamed from verificationConfidence) is manager-only
   /\bconfidence\b/i,
   /\bverdict\b/i,
   /consistency/i,
@@ -52,7 +53,8 @@ describe('T-08 · employee surfaces never render a verification / confidence / v
       'utf8',
     );
     expect(contract).toMatch(/verificationResult/);
-    expect(contract).toMatch(/verificationConfidence/);
+    // P1-4: the verdict-score field was renamed verificationConfidence → verificationScore.
+    expect(contract).toMatch(/verificationScore/);
     expect(contract).toMatch(/ManagerStatusClaimView/);
   });
 });

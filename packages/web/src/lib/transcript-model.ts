@@ -101,8 +101,8 @@ export interface ClaimView {
 export interface VerdictView {
   /** verified | conflict | pending | unverified (from the Task; the only "verified" source). */
   verifiedState: string;
-  /** Verification confidence in [0,1] — distinct from STT confidence. */
-  confidence: number | null;
+  /** S2 verdict score in [0,1] (renamed from `confidence` in P1-4). Distinct from STT confidence. */
+  verificationScore: number | null;
 }
 
 export interface TranscriptFeedItem {

@@ -41,7 +41,10 @@ export class RecommendationRepository {
   async gatherContext(tenantId: string, objectId: string): Promise<AgentContext | null> {
     return withTenant(tenantId, async (c) => {
       const objRes = await c.query<ObjRow>(
-        `SELECT id, type, properties, verified_state, claimed_state, confidence FROM objects WHERE id = $1`,
+        // P1-4: the objects verdict-score DB column was renamed confidence -> verification_score (A-family).
+        // The recommendation agent's input DTO field stays `confidence` (B-family self-confidence signal),
+        // so we alias the renamed column back to the DTO name here rather than churning the agent surface.
+        `SELECT id, type, properties, verified_state, claimed_state, verification_score AS confidence FROM objects WHERE id = $1`,
         [objectId],
       );
       const o = objRes.rows[0];
@@ -88,7 +91,9 @@ export class RecommendationRepository {
     return withTenant(tenantId, async (c) => {
       const CANDIDATE_TYPES = ['Task', 'InventoryItem', 'Invoice', 'Payment', 'Claim', 'Review', 'Lead', 'Campaign', 'Equipment'];
       const objs = await c.query<ObjRow>(
-        `SELECT id, type, properties, verified_state, claimed_state, confidence
+        // P1-4: alias the renamed A-family column (verification_score) back to the B-family agent
+        // input DTO name (confidence). See gatherContext for the rationale.
+        `SELECT id, type, properties, verified_state, claimed_state, verification_score AS confidence
            FROM objects
           WHERE type = ANY($1) AND (properties->>'archived') IS DISTINCT FROM 'true'`,
         [CANDIDATE_TYPES],

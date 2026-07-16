@@ -32,8 +32,8 @@ export interface VerificationLedgerEntry<TEvidence = Record<string, unknown>> {
   /** Optional link to a Verification object in `objects`. */
   verificationId: string | null;
   verifiedState: string;
-  /** Confidence in [0, 1]. */
-  confidence: number;
+  /** Deterministic S2 verdict score in [0,1] (RULE score, not a probability). Renamed from `confidence` in P1-4. */
+  verificationScore: number;
   /** Structured evidence chips (communication / document / snapshot / schedule / model). */
   evidence: TEvidence;
   /** Human-readable rationale for the verified state. */

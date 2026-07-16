@@ -16,7 +16,7 @@ type Triplet = {
   expected?: string | null;
   claimed?: string | null;
   verified?: string | null;
-  confidence?: number | null;
+  verificationScore?: number | null;
 };
 
 async function insObject(
@@ -25,17 +25,17 @@ async function insObject(
   type: string,
   opts: Triplet = {},
 ): Promise<string> {
-  const { properties = {}, expected = null, claimed = null, verified = null, confidence = null } =
+  const { properties = {}, expected = null, claimed = null, verified = null, verificationScore = null } =
     opts;
   // A Task IS a flow: mint an initial `pending` flow whose id equals the Task's own object id
   // (each task is its own flow). The manager decision endpoint is the only thing that closes it.
   const isTask = type === 'Task';
   const res = await client.query<{ id: string }>(
     `INSERT INTO objects
-       (tenant_id, type, properties, expected_state, claimed_state, verified_state, confidence, flow_state)
+       (tenant_id, type, properties, expected_state, claimed_state, verified_state, verification_score, flow_state)
      VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8)
      RETURNING id`,
-    [tenantId, type, JSON.stringify(properties), expected, claimed, verified, confidence, isTask ? 'pending' : null],
+    [tenantId, type, JSON.stringify(properties), expected, claimed, verified, verificationScore, isTask ? 'pending' : null],
   );
   const id = res.rows[0]!.id;
   if (isTask) {
@@ -77,14 +77,14 @@ async function ledger(
   tenantId: string,
   objectId: string,
   verifiedState: string,
-  confidence: number,
+  verificationScore: number,
   evidence: unknown,
   reason: string,
 ): Promise<void> {
   await client.query(
-    `INSERT INTO verification_ledger (tenant_id, object_id, verified_state, confidence, evidence, reason)
+    `INSERT INTO verification_ledger (tenant_id, object_id, verified_state, verification_score, evidence, reason)
      VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
-    [tenantId, objectId, verifiedState, confidence, JSON.stringify(evidence), reason],
+    [tenantId, objectId, verifiedState, verificationScore, JSON.stringify(evidence), reason],
   );
 }
 
@@ -125,7 +125,7 @@ async function seedTenantA(client: Client): Promise<void> {
     expected: 'ready',
     claimed: 'ready',
     verified: 'conflict',
-    confidence: 0.5,
+    verificationScore: 0.5,
   });
 
   const solution = await insObject(client, t, 'InventoryItem', {
@@ -138,7 +138,7 @@ async function seedTenantA(client: Client): Promise<void> {
     expected: 'ready',
     claimed: 'ready',
     verified: 'conflict',
-    confidence: 0.5,
+    verificationScore: 0.5,
   });
 
   const reorder: MvpTaskType = 'inventory_reorder';
@@ -147,7 +147,7 @@ async function seedTenantA(client: Client): Promise<void> {
     expected: 'ordered',
     claimed: null,
     verified: 'unverified',
-    confidence: null,
+    verificationScore: null,
   });
 
   const comm = await insObject(client, t, 'Communication', {
@@ -170,7 +170,7 @@ async function seedTenantA(client: Client): Promise<void> {
   const verification = await insObject(client, t, 'Verification', {
     properties: { method: 'cross-verify' },
     verified: 'verified',
-    confidence: 0.855,
+    verificationScore: 0.855,
   });
 
   // relations
@@ -275,7 +275,7 @@ async function seedTenantA(client: Client): Promise<void> {
     expected: 'done',
     claimed: 'done',
     verified: 'pending',
-    confidence: 0.5,
+    verificationScore: 0.5,
   });
   await insObject(client, t, 'Alert', {
     properties: {
@@ -284,7 +284,7 @@ async function seedTenantA(client: Client): Promise<void> {
       severity: 'medium',
       triggered: ['overdue', 'missing_required'],
       verifiedState: 'pending',
-      confidence: 0.5,
+      verificationScore: 0.5,
     },
   });
   await link(client, t, staffTech, overduePretest, 'assignedTo');
@@ -305,7 +305,7 @@ async function seedTenantB(client: Client): Promise<void> {
     expected: 'calibrated',
     claimed: 'calibrated',
     verified: 'pending',
-    confidence: 0.5,
+    verificationScore: 0.5,
   });
   await link(client, t, manager, task, 'assignedTo');
   await link(client, t, task, room, 'references');

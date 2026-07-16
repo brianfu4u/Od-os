@@ -30,12 +30,12 @@ async function insObject(
   tenant: string,
   type: string,
   properties: Record<string, unknown>,
-  opts: { claimed?: string | null; verified?: string | null; confidence?: number | null } = {},
+  opts: { claimed?: string | null; verified?: string | null; verificationScore?: number | null } = {},
 ): Promise<string> {
   const res = await admin.query<{ id: string }>(
-    `INSERT INTO objects (tenant_id, type, properties, claimed_state, verified_state, confidence)
+    `INSERT INTO objects (tenant_id, type, properties, claimed_state, verified_state, verification_score)
      VALUES ($1,$2,$3::jsonb,$4,$5,$6) RETURNING id`,
-    [tenant, type, JSON.stringify(properties), opts.claimed ?? null, opts.verified ?? null, opts.confidence ?? null],
+    [tenant, type, JSON.stringify(properties), opts.claimed ?? null, opts.verified ?? null, opts.verificationScore ?? null],
   );
   return res.rows[0]!.id;
 }
@@ -69,10 +69,10 @@ async function main(): Promise<void> {
       scans: [{ scannedObjectType: 'Equipment', scannedObjectId: oct, at: ago(15) }],
     });
     // cross-domain: a conflicted task (patient_flow) + a low inventory item (inventory)
-    await insObject(admin, A, 'Task', { taskType: 'room_turnover', label: 'Room 5' }, { claimed: 'ready', verified: 'conflict', confidence: 0.5 });
+    await insObject(admin, A, 'Task', { taskType: 'room_turnover', label: 'Room 5' }, { claimed: 'ready', verified: 'conflict', verificationScore: 0.5 });
     await insObject(admin, A, 'InventoryItem', { name: 'Fluorescein strips', onHand: 1, reorderPoint: 6 });
     // staff: an overdue task + its overdue Alert (the sweep reads the latest Alert per object)
-    const overdue = await insObject(admin, A, 'Task', { taskType: 'pretest_done', label: 'Bay 2', dueBy: days(1), reassignTo: 'tech-2' }, { claimed: 'done', verified: 'pending', confidence: 0.5 });
+    const overdue = await insObject(admin, A, 'Task', { taskType: 'pretest_done', label: 'Bay 2', dueBy: days(1), reassignTo: 'tech-2' }, { claimed: 'done', verified: 'pending', verificationScore: 0.5 });
     await insObject(admin, A, 'Alert', { objectId: overdue, reason: 'overdue', severity: 'medium', triggered: ['overdue'] });
 
     // tenant B: one financial object that WOULD fire — to prove isolation.

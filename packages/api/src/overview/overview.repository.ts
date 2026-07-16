@@ -61,12 +61,12 @@ export class OverviewRepository {
       const ledgerRes = await c.query<{
         object_id: string;
         verified_state: string;
-        confidence: string;
+        verification_score: string;
         evidence: unknown;
         created_at: string;
         properties: Record<string, unknown>;
       }>(
-        `SELECT vl.object_id, vl.verified_state, vl.confidence, vl.evidence, vl.created_at, o.properties
+        `SELECT vl.object_id, vl.verified_state, vl.verification_score, vl.evidence, vl.created_at, o.properties
            FROM verification_ledger vl JOIN objects o ON o.id = vl.object_id
           ORDER BY vl.created_at DESC LIMIT 8`,
       );
@@ -77,7 +77,7 @@ export class OverviewRepository {
           objectId: r.object_id,
           title: title(r.properties),
           verifiedState: r.verified_state,
-          confidence: Number(r.confidence),
+          verificationScore: Number(r.verification_score),
           evidenceCount: items.length,
           evidenceKinds: kinds,
           at: new Date(r.created_at).toISOString(),

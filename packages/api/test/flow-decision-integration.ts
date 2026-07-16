@@ -95,7 +95,7 @@ async function main(): Promise<void> {
 
     // Manually stamp a verified_state to prove decide() never touches it later (reference data only).
     await withTenant(A, async (c) => {
-      await c.query(`UPDATE objects SET verified_state = 'below_target', confidence = 0.42 WHERE id = $1`, [taskId]);
+      await c.query(`UPDATE objects SET verified_state = 'below_target', verification_score = 0.42 WHERE id = $1`, [taskId]);
     });
 
     // ---- REJECT does NOT close the flow; stays pending in the SAME flow; reason persisted ----

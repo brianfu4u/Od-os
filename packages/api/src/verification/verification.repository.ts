@@ -65,7 +65,14 @@ export class VerificationRepository {
         requiredEvidence: Array.isArray(props.requiredEvidence) ? (props.requiredEvidence as string[]) : undefined,
         expectedDurationMin: typeof props.expectedDurationMin === 'number' ? props.expectedDurationMin : undefined,
         evidenceWeights: mergedWeights,
-        confidenceThreshold: typeof props.confidenceThreshold === 'number' ? props.confidenceThreshold : learned?.threshold,
+        // Accept both the new `verificationScoreThreshold` and the legacy `confidenceThreshold`
+        // jsonb override key (P1-4 backward-compat for objects created before the rename).
+        verificationScoreThreshold:
+          typeof props.verificationScoreThreshold === 'number'
+            ? props.verificationScoreThreshold
+            : typeof props.confidenceThreshold === 'number'
+              ? props.confidenceThreshold
+              : learned?.threshold,
         baseSelfClaim: typeof props.baseSelfClaim === 'number' ? props.baseSelfClaim : learned?.base,
       });
 
@@ -139,7 +146,7 @@ export class VerificationRepository {
         requiredMissing,
         timingAnomaly,
         crossObjectContradiction,
-        threshold: sop.confidenceThreshold,
+        threshold: sop.verificationScoreThreshold,
         // S0-7: fold the task's per-kind weights and self-claim base into the pure scorer.
         weights: sop.evidenceWeights,
         baseSelfClaim: sop.baseSelfClaim,
@@ -154,22 +161,22 @@ export class VerificationRepository {
       }
       const result: VerificationResult = { ...scored, triggered };
 
-      // Persist: object's verified slot (S2 owns verified_state + confidence).
-      await c.query(`UPDATE objects SET verified_state = $2, confidence = $3 WHERE id = $1`, [
+      // Persist: object's verified slot (S2 owns verified_state + verification_score).
+      await c.query(`UPDATE objects SET verified_state = $2, verification_score = $3 WHERE id = $1`, [
         objectId,
         result.verifiedState,
-        result.confidence,
+        result.verificationScore,
       ]);
       // Append-only ledger row (immutable history).
       await c.query(
-        `INSERT INTO verification_ledger (tenant_id, object_id, verified_state, confidence, evidence, reason)
+        `INSERT INTO verification_ledger (tenant_id, object_id, verified_state, verification_score, evidence, reason)
          VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
-        [tenantId, objectId, result.verifiedState, result.confidence, JSON.stringify(result.evidence), result.reason],
+        [tenantId, objectId, result.verifiedState, result.verificationScore, JSON.stringify(result.evidence), result.reason],
       );
       await c.query(
         `INSERT INTO events (tenant_id, object_id, event_type, payload, actor)
          VALUES ($1, $2, 'object.state.verified', $3::jsonb, 'verification')`,
-        [tenantId, objectId, JSON.stringify({ verifiedState: result.verifiedState, confidence: result.confidence })],
+        [tenantId, objectId, JSON.stringify({ verifiedState: result.verifiedState, verificationScore: result.verificationScore })],
       );
 
       // Raise an Alert (object + link + event) when triggers fired.
@@ -186,7 +193,7 @@ export class VerificationRepository {
               severity,
               triggered,
               verifiedState: result.verifiedState,
-              confidence: result.confidence,
+              verificationScore: result.verificationScore,
             }),
           ],
         );
@@ -219,15 +226,15 @@ export class VerificationRepository {
     reason: string,
   ): Promise<{ objectId: string; fromState: string | null; toState: string } | null> {
     return withTenant(tenantId, async (c) => {
-      const objRes = await c.query<{ properties: Record<string, unknown>; verified_state: string | null; confidence: string | null }>(
-        `SELECT properties, verified_state, confidence FROM objects WHERE id = $1`,
+      const objRes = await c.query<{ properties: Record<string, unknown>; verified_state: string | null; verification_score: string | null }>(
+        `SELECT properties, verified_state, verification_score FROM objects WHERE id = $1`,
         [objectId],
       );
       const obj = objRes.rows[0];
       if (!obj) return null;
       const fromState = obj.verified_state;
       const taskType = typeof obj.properties?.taskType === 'string' ? (obj.properties.taskType as string) : null;
-      const confidence = obj.confidence == null ? 0.5 : Number(obj.confidence);
+      const verificationScore = obj.verification_score == null ? 0.5 : Number(obj.verification_score);
 
       // Evidence kinds on record (from the latest ledger row) — the signal context for the learner.
       const led = await c.query<{ evidence: unknown }>(
@@ -245,9 +252,9 @@ export class VerificationRepository {
 
       await c.query(`UPDATE objects SET verified_state = $2 WHERE id = $1`, [objectId, toState]);
       await c.query(
-        `INSERT INTO verification_ledger (tenant_id, object_id, verified_state, confidence, evidence, reason)
+        `INSERT INTO verification_ledger (tenant_id, object_id, verified_state, verification_score, evidence, reason)
          VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
-        [tenantId, objectId, toState, confidence, JSON.stringify(evArr), `manual correction: ${reason}`],
+        [tenantId, objectId, toState, verificationScore, JSON.stringify(evArr), `manual correction: ${reason}`],
       );
       await c.query(
         `INSERT INTO events (tenant_id, object_id, event_type, payload, actor) VALUES ($1, $2, 'object.state.corrected', $3::jsonb, 'manager')`,

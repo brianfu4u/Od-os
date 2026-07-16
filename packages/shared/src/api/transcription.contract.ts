@@ -11,8 +11,12 @@
 export interface VoiceFeedVerdict {
   /** verified | conflict | pending | unverified (from the driving Task; the only "verified" source). */
   verifiedState: string;
-  /** Verification confidence in [0,1] — distinct from STT confidence. */
-  confidence: number | null;
+  /**
+   * Deterministic S2 verdict score in [0,1] (RULE score, not a probability). Renamed from
+   * `confidence` in P1-4. DISTINCT from the STT transcription confidence (that stays `confidence`
+   * on the transcription_log / VoiceFeedRecord.properties.llm — a different concept, kept on purpose).
+   */
+  verificationScore: number | null;
 }
 
 export interface VoiceFeedRecord {
