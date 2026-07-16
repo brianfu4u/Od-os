@@ -10,7 +10,7 @@ export interface LedgerEntrySummary {
   objectId: string;
   title: string;
   verifiedState: string;
-  confidence: number;
+  verificationScore: number;
   evidenceCount: number;
   /** Distinct evidence kinds present (qr_scan/snapshot/document/communication/…) for chips. */
   evidenceKinds: string[];

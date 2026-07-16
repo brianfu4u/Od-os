@@ -28,7 +28,7 @@ interface ObjRow {
   type: string;
   properties: Record<string, unknown>;
   verifiedState: string | null;
-  confidence: number | null;
+  verificationScore: number | null;
 }
 interface LogEntry {
   at: string;
@@ -184,7 +184,7 @@ export function StaffConsole() {
             type: resolved.type,
             properties: { label: resolved.label },
             verifiedState: resolved.verifiedState,
-            confidence: resolved.confidence,
+            verificationScore: resolved.verificationScore,
           };
           setObjects((prev) => (prev.some((o) => o.id === row.id) ? prev : [row, ...prev]));
           setSubjectId(resolved.objectId);
@@ -210,7 +210,7 @@ export function StaffConsole() {
         type: 'Task',
         properties: { label: task.label, taskType: task.taskType ?? undefined },
         verifiedState: task.verifiedState,
-        confidence: task.confidence,
+        verificationScore: task.verificationScore,
       };
       setObjects((prev) => (prev.some((o) => o.id === row.id) ? prev : [row, ...prev]));
       setSubjectId(task.taskId);
@@ -339,7 +339,7 @@ export function StaffConsole() {
     setBusy(true);
     try {
       const res = await api.verify(subject.id);
-      pushLog(true, `${t('console.verify')} → ${res.verifiedState} ${pct(res.confidence)}`);
+      pushLog(true, `${t('console.verify')} → ${res.verifiedState} ${pct(res.verificationScore)}`);
       await loadObjects();
     } catch (e) {
       pushLog(false, `${t('console.verify')}: ${e instanceof Error ? e.message : String(e)}`);
@@ -474,7 +474,7 @@ export function StaffConsole() {
             {objects.length === 0 ? <option value="">{t('console.noObjects')}</option> : null}
             {objects.map((o) => (
               <option key={o.id} value={o.id}>
-                {o.type} · {labelOf(o)} {o.verifiedState ? `· ${o.verifiedState} ${pct(o.confidence ?? undefined)}` : ''}
+                {o.type} · {labelOf(o)} {o.verifiedState ? `· ${o.verifiedState} ${pct(o.verificationScore ?? undefined)}` : ''}
               </option>
             ))}
           </select>

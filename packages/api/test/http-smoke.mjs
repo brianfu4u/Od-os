@@ -332,7 +332,7 @@ export async function runHttpSmoke({
   check(claimResp.ok && claimBody.claimedStatus === 'busy', `POST /employee-status/claims → ok, status=busy (got ${claimResp.status})`);
   // Field-projection guarantee over the wire: no verification key leaks to the employee.
   check(
-    !('verificationResult' in claimBody) && !('verification_result' in claimBody) && !('verificationConfidence' in claimBody),
+    !('verificationResult' in claimBody) && !('verification_result' in claimBody) && !('verificationScore' in claimBody),
     'employee claim response carries no verification field (projection)',
   );
 

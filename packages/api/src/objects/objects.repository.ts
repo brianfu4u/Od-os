@@ -20,7 +20,7 @@ interface ObjectRow {
   expected_state: string | null;
   claimed_state: string | null;
   verified_state: string | null;
-  confidence: string | null;
+  verification_score: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -54,7 +54,7 @@ function mapObject(r: ObjectRow): OntologyObject {
     expectedState: r.expected_state,
     claimedState: r.claimed_state,
     verifiedState: r.verified_state,
-    confidence: r.confidence === null ? null : Number(r.confidence),
+    verificationScore: r.verification_score === null ? null : Number(r.verification_score),
     createdAt: new Date(r.created_at).toISOString(),
     updatedAt: new Date(r.updated_at).toISOString(),
   };
@@ -70,7 +70,7 @@ export class ObjectsRepository {
   async create(tenantId: string, input: CreateObjectInput): Promise<OntologyObject> {
     return withTenant(tenantId, async (c) => {
       const res = await c.query<ObjectRow>(
-        `INSERT INTO objects (tenant_id, type, properties, expected_state, claimed_state, verified_state, confidence)
+        `INSERT INTO objects (tenant_id, type, properties, expected_state, claimed_state, verified_state, verification_score)
          VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7)
          RETURNING *`,
         [
@@ -80,7 +80,7 @@ export class ObjectsRepository {
           input.expectedState ?? null,
           input.claimedState ?? null,
           input.verifiedState ?? null,
-          input.confidence ?? null,
+          input.verificationScore ?? null,
         ],
       );
       const row = res.rows[0]!;
@@ -158,7 +158,7 @@ export class ObjectsRepository {
         type: row.type,
         label: labelOfProps(row.type, row.properties ?? {}),
         verifiedState: row.verified_state,
-        confidence: row.confidence === null ? null : Number(row.confidence),
+        verificationScore: row.verification_score === null ? null : Number(row.verification_score),
       };
     });
   }
@@ -179,7 +179,7 @@ export class ObjectsRepository {
 
       const res = await c.query<ObjectRow>(
         `UPDATE objects
-           SET properties = $2::jsonb, expected_state = $3, claimed_state = $4, verified_state = $5, confidence = $6
+           SET properties = $2::jsonb, expected_state = $3, claimed_state = $4, verified_state = $5, verification_score = $6
          WHERE id = $1
          RETURNING *`,
         [
@@ -188,11 +188,11 @@ export class ObjectsRepository {
           input.expectedState !== undefined ? input.expectedState : existing.expected_state,
           input.claimedState !== undefined ? input.claimedState : existing.claimed_state,
           input.verifiedState !== undefined ? input.verifiedState : existing.verified_state,
-          input.confidence !== undefined
-            ? input.confidence
-            : existing.confidence === null
+          input.verificationScore !== undefined
+            ? input.verificationScore
+            : existing.verification_score === null
               ? null
-              : Number(existing.confidence),
+              : Number(existing.verification_score),
         ],
       );
       const row = res.rows[0]!;
@@ -254,7 +254,7 @@ export class ObjectsRepository {
             expectedState: o.expected_state,
             claimedState: o.claimed_state,
             verifiedState: o.verified_state,
-            confidence: o.confidence === null ? null : Number(o.confidence),
+            verificationScore: o.verification_score === null ? null : Number(o.verification_score),
           }
         : null;
 
@@ -270,14 +270,14 @@ export class ObjectsRepository {
         at: new Date(r.created_at).toISOString(),
       }));
 
-      const ldRes = await c.query<{ id: string; verified_state: string; confidence: string; evidence: unknown; reason: string | null; created_at: string }>(
-        `SELECT id, verified_state, confidence, evidence, reason, created_at FROM verification_ledger WHERE object_id = $1 ORDER BY created_at ASC`,
+      const ldRes = await c.query<{ id: string; verified_state: string; verification_score: string; evidence: unknown; reason: string | null; created_at: string }>(
+        `SELECT id, verified_state, verification_score, evidence, reason, created_at FROM verification_ledger WHERE object_id = $1 ORDER BY created_at ASC`,
         [id],
       );
       const ledger = ldRes.rows.map((r) => ({
         id: r.id,
         verifiedState: r.verified_state,
-        confidence: Number(r.confidence),
+        verificationScore: Number(r.verification_score),
         evidence: Array.isArray(r.evidence) ? (r.evidence as Array<{ kind?: string; ref?: string; note?: string }>) : [],
         reason: r.reason ?? null,
         at: new Date(r.created_at).toISOString(),

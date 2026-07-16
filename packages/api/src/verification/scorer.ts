@@ -118,7 +118,9 @@ export class DeterministicScorer implements Scorer {
 
     return {
       verifiedState,
-      confidence: round3(confidence),
+      // A-family output field (renamed from `confidence` in P1-4). The local var stays `confidence`
+      // as the deterministic rule accumulator; only the emitted VerificationResult field is renamed.
+      verificationScore: round3(confidence),
       reason: this.buildReason(verifiedState, confidence, supporting, contradicting, input),
       evidence: input.evidence,
       requiredMissing: input.requiredMissing,

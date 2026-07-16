@@ -59,10 +59,10 @@ async function main(): Promise<void> {
 
     const updated = await repo.update(A, created.id, {
       claimedState: 'ready',
-      confidence: 0.8,
+      verificationScore: 0.8,
       properties: { note: 'x' },
     });
-    check(updated?.claimedState === 'ready' && updated?.confidence === 0.8, 'update sets state triplet');
+    check(updated?.claimedState === 'ready' && updated?.verificationScore === 0.8, 'update sets state triplet');
     check(
       updated?.properties.taskType === 'room_turnover' && updated?.properties.note === 'x',
       'update shallow-merges properties',

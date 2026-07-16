@@ -56,6 +56,7 @@ export interface RecommendationRecord {
   title: string;
   why: string;
   evidence: RecommendationEvidence[];
+  /** B-family agent self-confidence (NOT the S2 verdict score). Kept as `confidence` on purpose in P1-4. */
   confidence: number;
   actions: ProposedAction[];
   rank: number;

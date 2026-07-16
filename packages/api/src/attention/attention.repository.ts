@@ -27,7 +27,7 @@ interface FactsRow {
   secs_since_scan: string | null;
   secs_since_followup: string | null;
   verification_result: string | null;
-  verification_confidence: string | null;
+  verification_score: string | null;
 }
 
 /**
@@ -98,8 +98,8 @@ export class AttentionRepository {
       secondsSinceLastScan: num(row.secs_since_scan),
       secondsSinceScanFollowup: num(row.secs_since_followup),
       verificationResult: row.verification_result,
-      verificationConfidence:
-        row.verification_confidence === null ? null : Number(row.verification_confidence),
+      verificationScore:
+        row.verification_score === null ? null : Number(row.verification_score),
       nowIso,
     };
   }
@@ -127,7 +127,7 @@ export class AttentionRepository {
           ORDER BY employee_id, scanned_at DESC
        ),
        last_claim AS (
-         SELECT DISTINCT ON (employee_id) employee_id, verification_result, verification_confidence
+         SELECT DISTINCT ON (employee_id) employee_id, verification_result, verification_score
            FROM employee_status_claims
           ORDER BY employee_id, claimed_at DESC
        )
@@ -151,7 +151,7 @@ export class AttentionRepository {
               AND e.created_at > ls.scanned_at
          )                                                           AS secs_since_followup,
          lc.verification_result                                      AS verification_result,
-         lc.verification_confidence                                  AS verification_confidence
+         lc.verification_score                                  AS verification_score
        FROM staff s
        LEFT JOIN fresh f      ON f.employee_id = s.id
        LEFT JOIN last_scan ls ON ls.employee_id = s.id

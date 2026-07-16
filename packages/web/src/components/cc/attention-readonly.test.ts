@@ -58,7 +58,7 @@ describe('T-09 · manager read-only panels carry NO adjudication control', () =>
     });
 
     it(`${file}: never renders a verification / confidence / verdict field`, () => {
-      expect(src).not.toMatch(/verificationResult|verificationConfidence|verdict/i);
+      expect(src).not.toMatch(/verificationResult|verificationConfidence|verificationScore|verdict/i);
     });
   }
 

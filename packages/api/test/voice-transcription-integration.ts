@@ -80,8 +80,8 @@ async function insVoiceDoc(admin: Client, tenant: string): Promise<string> {
 }
 
 async function readObj(admin: Client, id: string) {
-  const r = await admin.query<{ claimed_state: string | null; verified_state: string | null; confidence: string | null; properties: Record<string, unknown> }>(
-    `SELECT claimed_state, verified_state, confidence, properties FROM objects WHERE id=$1`,
+  const r = await admin.query<{ claimed_state: string | null; verified_state: string | null; verification_score: string | null; properties: Record<string, unknown> }>(
+    `SELECT claimed_state, verified_state, verification_score, properties FROM objects WHERE id=$1`,
     [id],
   );
   return r.rows[0]!;
@@ -143,7 +143,7 @@ async function main(): Promise<void> {
     const afterClaim = await readObj(admin, taskC);
     check(afterClaim.claimed_state === 'ready', 'B: voice transcript drove claimed_state=ready');
     check(afterClaim.verified_state === 'conflict', 'B: deterministic engine returned CONFLICT (too-fast + missing snapshot)');
-    check(near(afterClaim.confidence, 0.5), `B: conflict confidence ≈ 0.50 (got ${afterClaim.confidence})`);
+    check(near(afterClaim.verification_score, 0.5), `B: conflict verification_score ≈ 0.50 (got ${afterClaim.verification_score})`);
 
     const ledger = await admin.query<{ n: number }>(`SELECT count(*)::int AS n FROM verification_ledger WHERE object_id=$1`, [taskC]);
     check((ledger.rows[0]?.n ?? 0) >= 1, 'B: verification_ledger row written by the deterministic engine (not STT/LLM)');
@@ -152,7 +152,7 @@ async function main(): Promise<void> {
     await admin.query(`INSERT INTO links (tenant_id, from_object, to_object, relation) VALUES ($1,$2,$3,'references')`, [C, snap.rows[0]!.id, taskC]);
     const reVerified = await verification.verifyObject(C, taskC);
     check(reVerified?.verifiedState === 'verified', 'B: snapshot attached → re-verify → VERIFIED');
-    check(near(reVerified?.confidence ?? 0, 0.855), `B: verified confidence ≈ 0.855 (got ${reVerified?.confidence})`);
+    check(near(reVerified?.verificationScore ?? 0, 0.855), `B: verified verificationScore ≈ 0.855 (got ${reVerified?.verificationScore})`);
 
     // ── Part C: APPEND-ONLY IMMUTABILITY + TENANT ISOLATION ───────────────────────────────
     let blocked = false;
@@ -174,7 +174,7 @@ async function main(): Promise<void> {
 
     const feedC = await transcriptionRepo.listVoiceFeed(C);
     check(feedC.length === 1 && feedC[0]!.objectId === voiceC, 'D: feed(C) returns tenant C\'s voice doc');
-    check(feedC[0]!.verdict?.verifiedState === 'verified' && near(feedC[0]!.verdict?.confidence, 0.855), 'D: feed(C) verdict = verified@0.855 (joined from the driving Task)');
+    check(feedC[0]!.verdict?.verifiedState === 'verified' && near(feedC[0]!.verdict?.verificationScore, 0.855), 'D: feed(C) verdict = verified@0.855 (joined from the driving Task)');
 
     const feedB = await transcriptionRepo.listVoiceFeed(B);
     check(feedB.length === 0, 'D: feed(B) is empty — RLS scopes the feed to the tenant');
