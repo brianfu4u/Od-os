@@ -81,7 +81,7 @@ describe('buildFeed — scoped records → provenance & the moat', () => {
     const [item] = buildFeed([r]);
     expect(item!.transcript.status).toBe('done');
     expect(item!.claim).toEqual({ taskType: 'room_turnover', claimedState: 'ready' });
-    expect(item!.verdict).toEqual({ verifiedState: 'verified', confidence: 0.855 });
+    expect(item!.verdict).toEqual({ verifiedState: 'verified', verificationScore: 0.855 });
   });
 
   it('prefers claim.taskType when present', () => {
