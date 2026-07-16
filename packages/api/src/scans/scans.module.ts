@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ObjectsModule } from '../objects/objects.module';
+import { RetentionModule } from '../retention/retention.module';
 import { ScansController } from './scans.controller';
 import { ScansService } from './scans.service';
 import { ScansRepository } from './scans.repository';
@@ -12,7 +13,7 @@ import { ScansRepository } from './scans.repository';
  * Imports ObjectsModule for RealtimeService (a thin broadcast-only SSE nudge to the manager board).
  */
 @Module({
-  imports: [ObjectsModule],
+  imports: [ObjectsModule, RetentionModule],
   controllers: [ScansController],
   providers: [ScansService, ScansRepository],
 })

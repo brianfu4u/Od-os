@@ -11,6 +11,7 @@ import { Injectable } from '@nestjs/common';
 import type { PoolClient } from 'pg';
 import { withTenant } from '../database/tenant-context';
 import { getSopConfig } from '../verification/sop-config';
+import { SensitivePayloadsRepository } from '../retention/sensitive-payloads.repository';
 import type { ListenClaim, SummaryInputEvent } from './listener.types';
 
 export interface LoadedComm {
@@ -43,6 +44,8 @@ export interface AuditRow {
 
 @Injectable()
 export class LlmListenerRepository {
+  constructor(private readonly sensitive: SensitivePayloadsRepository) {}
+
   loadCommunication(tenantId: string, communicationId: string): Promise<LoadedComm | null> {
     return withTenant(tenantId, async (c) => {
       const res = await c.query<{ id: string; properties: Record<string, unknown> }>(
@@ -148,11 +151,12 @@ export class LlmListenerRepository {
   /** Append-only audit: one row per analysis, tracing model + prompt version + applied action. */
   audit(tenantId: string, row: AuditRow): Promise<void> {
     return withTenant(tenantId, async (c: PoolClient) => {
-      await c.query(
+      const res = await c.query<{ id: string }>(
         `INSERT INTO llm_analysis_log
            (tenant_id, communication_id, object_id, listener, model, prompt_version, locale,
             event_type, domain, severity, task_type, claimed_state, confidence, applied_action, input, output)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb)
+         RETURNING id`,
         [
           tenantId,
           row.communicationId,
@@ -172,6 +176,15 @@ export class LlmListenerRepository {
           JSON.stringify(row.output ?? {}),
         ],
       );
+      // P1-6-b population: mirror the raw analyzed text + full analysis into the redactable
+      // side-store, in the SAME transaction (atomic with the audit row). The append-only columns
+      // above are left untouched; this store is what the retention sweep later redacts. Empty input
+      // is skipped by mirrorText.
+      const logId = res.rows[0]?.id;
+      if (logId) {
+        await this.sensitive.mirrorText(c, tenantId, 'llm_analysis_log', logId, 'input', row.input ?? null);
+        await this.sensitive.mirrorJson(c, tenantId, 'llm_analysis_log', logId, 'output', row.output ?? undefined);
+      }
     });
   }
 

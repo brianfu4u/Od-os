@@ -28,6 +28,7 @@ import { VerificationService } from '../src/verification/verification.service';
 import { RecommendationRepository } from '../src/recommendations/recommendation.repository';
 import { RecommendationService } from '../src/recommendations/recommendation.service';
 import { LlmListenerRepository } from '../src/listener/listener.repository';
+import { SensitivePayloadsRepository } from '../src/retention/sensitive-payloads.repository';
 import { HeuristicListener } from '../src/listener/heuristic-listener';
 import { LlmListenerService } from '../src/listener/listener.service';
 import { TranscriptionRepository } from '../src/transcription/transcription.repository';
@@ -91,7 +92,7 @@ async function main(): Promise<void> {
   const url = requireDatabaseUrl();
   process.env.DATABASE_URL = url;
   const realtime = new RealtimeService();
-  const listenRepo = new LlmListenerRepository();
+  const listenRepo = new LlmListenerRepository(new SensitivePayloadsRepository());
   const transcriptionRepo = new TranscriptionRepository();
   const admin = new Client({ connectionString: url });
   await admin.connect();

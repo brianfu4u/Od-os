@@ -16,6 +16,7 @@ import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import { requireDatabaseUrl } from '../db/env';
 import { ScansRepository, NoStaffIdentityError } from '../src/scans/scans.repository';
+import { SensitivePayloadsRepository } from '../src/retention/sensitive-payloads.repository';
 import { closePool } from '../src/database/pool';
 import type { SessionIdentity } from '../src/auth/session.types';
 
@@ -38,7 +39,7 @@ const ident = (tenantId: string, staffId: string): SessionIdentity => ({ subject
 async function main(): Promise<void> {
   const url = requireDatabaseUrl();
   process.env.DATABASE_URL = url;
-  const repo = new ScansRepository();
+  const repo = new ScansRepository(new SensitivePayloadsRepository());
   const admin = new Client({ connectionString: url });
   await admin.connect();
   const A = randomUUID();

@@ -1,6 +1,7 @@
 import { Logger, Module } from '@nestjs/common';
 import { ObjectsModule } from '../objects/objects.module';
 import { RecommendationModule } from '../recommendations/recommendation.module';
+import { RetentionModule } from '../retention/retention.module';
 import { ListenerController } from './listener.controller';
 import { LlmListenerService } from './listener.service';
 import { LlmListenerRepository } from './listener.repository';
@@ -23,7 +24,7 @@ export function makeListener(): LlmListenerPort {
 }
 
 @Module({
-  imports: [ObjectsModule, RecommendationModule],
+  imports: [ObjectsModule, RecommendationModule, RetentionModule],
   controllers: [ListenerController],
   providers: [LlmListenerService, LlmListenerRepository, { provide: LLM_LISTENER, useFactory: makeListener }],
   // Exported so P7/T4 (TranscriptionModule) can feed voice transcripts through the same LLM1 path.
