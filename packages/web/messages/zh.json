@@ -479,6 +479,12 @@
       "title": "关注提示区",
       "subtitle": "供参考的待关注列表（只读，非裁决入口）",
       "empty": "当前无需关注项"
+    },
+    "reveal": {
+      "action": "查看原文",
+      "revealing": "查看中…",
+      "recorded": "此次查看已记录",
+      "absent": "无原文"
     }
   },
   "employeeStatus": {

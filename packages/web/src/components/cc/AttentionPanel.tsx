@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import type { AttentionItem } from '@clearview/shared';
 import { useSessionApi } from '../session/SessionProvider';
+import type { Api } from '../../lib/api';
 import { hhmm } from '../../lib/format';
 
 /**
@@ -108,7 +109,14 @@ export function AttentionPanel() {
                   <dt className="text-slate-500">{t('attention.evidence.claimed')}</dt>
                   <dd className="text-slate-300">{ev.claimed ?? '—'}</dd>
                   <dt className="text-slate-500">{t('attention.evidence.submitted')}</dt>
-                  <dd className="text-slate-300">{ev.submitted ?? '—'}</dd>
+                  <dd className="text-slate-300">
+                    <SubmittedCell
+                      masked={ev.submitted}
+                      revealable={ev.revealable === true}
+                      staffId={it.employeeId}
+                      api={api}
+                    />
+                  </dd>
                   <dt className="text-slate-500">{t('attention.evidence.systemObserved')}</dt>
                   <dd className="text-slate-300">{ev.systemObserved ?? '—'}</dd>
                 </dl>
@@ -118,5 +126,65 @@ export function AttentionPanel() {
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * P1-6-f · the `submitted` cell renders the MASKED scan code. When the finding is `revealable`, a
+ * manager may tap "查看原文" to fetch the full raw code from the audited reveal endpoint. Revealing is
+ * a server-side WRITE (each view is recorded), so once revealed we show a "此次查看已记录" hint — the
+ * reveal itself is the only interaction; nothing here changes world state or flows to the employee.
+ */
+function SubmittedCell({
+  masked,
+  revealable,
+  staffId,
+  api,
+}: {
+  masked: string | null;
+  revealable: boolean;
+  staffId: string;
+  api: Api | null;
+}) {
+  const t = useTranslations();
+  const [raw, setRaw] = useState<string | null>(null);
+  const [revealed, setRevealed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const reveal = useCallback(async () => {
+    if (!api || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await api.revealScanCode(staffId);
+      setRaw(res.scanCode);
+      setRevealed(true);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [api, busy, staffId]);
+
+  if (!revealable) return <>{masked ?? '—'}</>;
+
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <span className="font-mono">{revealed ? (raw ?? t('attention.reveal.absent')) : (masked ?? '—')}</span>
+      {revealed ? (
+        <span className="text-[10px] text-slate-500">{t('attention.reveal.recorded')}</span>
+      ) : (
+        <button
+          type="button"
+          onClick={() => void reveal()}
+          disabled={busy}
+          className="rounded border border-slate-700 px-1.5 py-0.5 text-[10px] text-slate-300 transition-colors hover:bg-slate-800/60 disabled:opacity-50"
+        >
+          {busy ? t('attention.reveal.revealing') : t('attention.reveal.action')}
+        </button>
+      )}
+      {err ? <span className="text-[10px] text-rose-300">{err}</span> : null}
+    </span>
   );
 }
