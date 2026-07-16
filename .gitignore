@@ -33,3 +33,8 @@ pnpm-debug.log*
 
 # local postgres data (if bind-mounted)
 /.pgdata/
+
+# runtime upload artifacts + local preview (not source)
+var/uploads/
+packages/api/var/uploads/
+ui-preview.html
