@@ -42,7 +42,43 @@ export class TranscriptionService implements TranscriptionHook {
     this.logger.log(`T4 STT active — transcriber: ${this.transcriber.name}`);
   }
 
-  /** Hook entrypoint used by uploads. Fire-and-forget friendly: never throws back to the caller. */
+  /**
+   * Hook entrypoint used by uploads (P0-3). Persists a durable 'pending' job row (awaited — fast) so
+   * the work survives a crash, then drains pending work off the request's critical path. Also
+   * self-heals: any of THIS tenant's jobs orphaned in 'processing' by an earlier crash are re-queued
+   * first. Never throws back into the upload path.
+   */
+  async enqueueTranscription(tenantId: string, objectId: string): Promise<void> {
+    try {
+      await this.repo.recoverStaleJobs(tenantId);
+      await this.repo.enqueueJob(tenantId, objectId);
+    } catch (err) {
+      // A queue write failure must not break the upload; log and fall back to a best-effort direct run.
+      this.logger.error(`enqueueTranscription failed for ${objectId}: ${msg(err)}`);
+      void this.transcribeObject(tenantId, objectId);
+      return;
+    }
+    void this.drainPending(tenantId).catch((err) => this.logger.error(`drainPending failed: ${msg(err)}`));
+  }
+
+  /** Claims and processes every currently-pending job for a tenant (claim is atomic → no dup work). */
+  async drainPending(tenantId: string): Promise<void> {
+    const jobs = await this.repo.listPendingJobs(tenantId);
+    for (const job of jobs) {
+      const claimed = await this.repo.claimJob(tenantId, job.id);
+      if (!claimed) continue; // another instance took it
+      try {
+        const outcome = await this.transcribe(tenantId, job.objectId);
+        // failed/unavailable → leave the job 'failed' (retriable); anything else is terminal success.
+        const failed = outcome === 'failed' || outcome === 'unavailable';
+        await this.repo.completeJob(tenantId, job.id, failed ? 'failed' : 'done', failed ? `outcome=${outcome}` : null);
+      } catch (err) {
+        await this.repo.completeJob(tenantId, job.id, 'failed', msg(err)).catch(() => undefined);
+      }
+    }
+  }
+
+  /** Direct best-effort transcription (used by the manual retry endpoint + queue-write fallback). */
   async transcribeObject(tenantId: string, objectId: string): Promise<void> {
     try {
       await this.transcribe(tenantId, objectId);

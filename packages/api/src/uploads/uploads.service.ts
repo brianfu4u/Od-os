@@ -33,7 +33,8 @@ export class UploadsService {
     file: UploadFileInput,
     opts: { kind?: string; linkTo?: string; relation?: string } = {},
   ): Promise<UploadResult> {
-    const error = validateUpload(file?.mimetype, file?.size);
+    // Validate (MIME + size + extension + magic bytes) BEFORE any storage write.
+    const error = validateUpload(file?.mimetype, file?.size, file?.originalname, file?.buffer);
     if (error) throw new BadRequestException(error);
 
     const objectType = detectObjectType(file.mimetype);
@@ -77,11 +78,13 @@ export class UploadsService {
       }
     }
 
-    // P7 · T4: a voice clip → transcribe asynchronously (STT). Fire-and-forget so the upload
-    // response is NEVER blocked by the STT call; the transcript lands later as a derived field on
-    // this Document and is fed to LLM1. transcribeObject swallows its own errors.
+    // P7 · T4 + P0-3: a voice clip → enqueue transcription DURABLY. We await only the persistence of
+    // the 'pending' job row (a fast DB insert), never the STT call itself — the transcript lands
+    // later as a derived field on this Document and is fed to LLM1. Persisting before processing means
+    // a crash mid-transcription no longer loses the work (it is recoverable). enqueueTranscription
+    // swallows its own errors so the upload response is never blocked or failed by STT.
     if (kind === 'voice' && this.transcription) {
-      void this.transcription.transcribeObject(tenantId, id).catch(() => undefined);
+      await this.transcription.enqueueTranscription(tenantId, id).catch(() => undefined);
     }
 
     return {

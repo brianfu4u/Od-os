@@ -6,7 +6,7 @@ import { UploadsController } from './uploads.controller';
 import { UploadsService } from './uploads.service';
 import { UploadsRepository } from './uploads.repository';
 import { STORAGE_PORT } from '../storage/storage.provider';
-import { LocalDiskStorageProvider } from '../storage/local-disk.provider';
+import { createStorageProvider } from '../storage/storage.factory';
 
 @Module({
   // RealtimeService + VERIFICATION_HOOK + TRANSCRIPTION_HOOK (P7/T4 async STT trigger).
@@ -15,10 +15,9 @@ import { LocalDiskStorageProvider } from '../storage/local-disk.provider';
   providers: [
     UploadsService,
     UploadsRepository,
-    // useFactory (not useClass): the provider's constructor takes an optional `baseDir?: string`
-    // it resolves from UPLOAD_DIR itself. useClass would make Nest try to inject that `String`
-    // param and fail to boot; the factory sidesteps DI introspection of the constructor.
-    { provide: STORAGE_PORT, useFactory: () => new LocalDiskStorageProvider() },
+    // useFactory (not useClass): the provider's constructor takes an optional param it resolves from
+    // env itself; the factory sidesteps DI introspection and selects local vs s3 via STORAGE_DRIVER.
+    { provide: STORAGE_PORT, useFactory: createStorageProvider },
   ],
 })
 export class UploadsModule {}

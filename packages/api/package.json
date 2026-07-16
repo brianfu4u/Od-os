@@ -11,6 +11,7 @@
     "lint": "eslint src",
     "test": "vitest run",
     "db:migrate": "tsx db/migrate.ts",
+    "cleanup": "tsx db/cleanup.ts",
     "db:seed": "tsx db/seed.ts",
     "db:reset": "tsx db/reset.ts",
     "db:backfill": "tsx db/backfill.ts",

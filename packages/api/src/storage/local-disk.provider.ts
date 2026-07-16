@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import type { PutFileParams, SignedUrl, StoragePort } from './storage.provider';
 import { signContentUrl } from './url-signing';
@@ -40,5 +40,9 @@ export class LocalDiskStorageProvider implements StoragePort {
 
   async read(storageKey: string): Promise<Buffer> {
     return readFileSync(this.absolute(storageKey));
+  }
+
+  async delete(storageKey: string): Promise<void> {
+    rmSync(this.absolute(storageKey), { force: true });
   }
 }

@@ -8,9 +8,10 @@ export const TRANSCRIPTION_HOOK = 'TRANSCRIPTION_HOOK';
 
 export interface TranscriptionHook {
   /**
-   * Transcribe a freshly uploaded voice evidence object. Best-effort and non-blocking for the
-   * caller: it must never throw back into the upload path. Async processing (network STT call)
-   * happens off the request's critical path.
+   * Durably enqueue transcription for a freshly uploaded voice evidence object (P0-3). Awaiting this
+   * only persists a 'pending' job row (fast) — the actual STT call runs off the request's critical
+   * path. Best-effort: it must never throw back into the upload path. Because the job is persisted
+   * BEFORE processing, a crash mid-transcription no longer loses the work (it is recoverable).
    */
-  transcribeObject(tenantId: string, objectId: string): Promise<void>;
+  enqueueTranscription(tenantId: string, objectId: string): Promise<void>;
 }

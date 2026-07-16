@@ -2,7 +2,7 @@ import { Logger, Module } from '@nestjs/common';
 import { ObjectsModule } from '../objects/objects.module';
 import { ListenerModule } from '../listener/listener.module';
 import { STORAGE_PORT } from '../storage/storage.provider';
-import { LocalDiskStorageProvider } from '../storage/local-disk.provider';
+import { createStorageProvider } from '../storage/storage.factory';
 import { TranscriptionController } from './transcription.controller';
 import { TranscriptionService } from './transcription.service';
 import { TranscriptionRepository } from './transcription.repository';
@@ -54,9 +54,9 @@ export function makeTranscriber(): Transcriber {
     TranscriptionService,
     TranscriptionRepository,
     { provide: TRANSCRIBER, useFactory: makeTranscriber },
-    // Own storage handle (same LocalDiskStorageProvider / UPLOAD_DIR as uploads) to read audio bytes.
-    { provide: STORAGE_PORT, useFactory: () => new LocalDiskStorageProvider() },
-    // The uploads module fires STT through this token (fire-and-forget) — same instance as the service.
+    // Own storage handle (same STORAGE_DRIVER selection as uploads) to read audio bytes back.
+    { provide: STORAGE_PORT, useFactory: createStorageProvider },
+    // The uploads module durably enqueues STT through this token — same instance as the service.
     { provide: TRANSCRIPTION_HOOK, useExisting: TranscriptionService },
   ],
   exports: [TRANSCRIPTION_HOOK],
