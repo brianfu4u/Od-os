@@ -24,4 +24,6 @@ export interface StoragePort {
   head(storageKey: string): Promise<{ exists: boolean; size: number }>;
   /** Reads bytes back (used by the dev signed-content route; prod serves direct from COS). */
   read(storageKey: string): Promise<Buffer>;
+  /** Deletes the stored object. A no-op (resolves) when the key does not exist (idempotent). */
+  delete(storageKey: string): Promise<void>;
 }

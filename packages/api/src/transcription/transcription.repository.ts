@@ -22,6 +22,19 @@ export interface VoiceEvidence {
   transcriptStatus: string | null;
 }
 
+/** A durable transcription work item (see 0018_transcription_jobs.sql). */
+export interface TranscriptionJob {
+  id: string;
+  objectId: string;
+  status: 'pending' | 'processing' | 'done' | 'failed';
+  attempts: number;
+}
+
+/** A 'processing' job older than this (no completion) is assumed orphaned by a crash and retried. */
+export const STALE_JOB_MS = Number(process.env.STT_JOB_STALE_MS) || 10 * 60 * 1000;
+/** Give up retrying after this many claims so a permanently-failing job cannot loop forever. */
+export const MAX_JOB_ATTEMPTS = Number(process.env.STT_JOB_MAX_ATTEMPTS) || 5;
+
 export interface TranscriptionLogRow {
   objectId: string;
   provider: string;
@@ -57,6 +70,81 @@ export class TranscriptionRepository {
         locale: typeof p.locale === 'string' ? p.locale : null,
         transcriptStatus: transcript && typeof transcript.status === 'string' ? transcript.status : null,
       };
+    });
+  }
+
+  /**
+   * Durable queue (P0-3): persist a PENDING job BEFORE any processing starts, so a crash mid-flight
+   * cannot silently lose the work. Returns the new job id.
+   */
+  enqueueJob(tenantId: string, objectId: string): Promise<{ id: string }> {
+    return withTenant(tenantId, async (c) => {
+      const res = await c.query<{ id: string }>(
+        `INSERT INTO transcription_jobs (tenant_id, object_id, status) VALUES ($1, $2, 'pending') RETURNING id`,
+        [tenantId, objectId],
+      );
+      return { id: res.rows[0]!.id };
+    });
+  }
+
+  /**
+   * Atomically claim a job for this worker: pending → processing (+attempts, +updated_at). Returns
+   * true only if THIS call won the row, so two instances can never process the same job at once.
+   */
+  claimJob(tenantId: string, jobId: string): Promise<boolean> {
+    return withTenant(tenantId, async (c) => {
+      const res = await c.query(
+        `UPDATE transcription_jobs
+            SET status = 'processing', attempts = attempts + 1, updated_at = now()
+          WHERE id = $1 AND status = 'pending'`,
+        [jobId],
+      );
+      return (res.rowCount ?? 0) > 0;
+    });
+  }
+
+  /** Terminal transition: processing → done | failed. `failed` stays retriable via recoverStaleJobs. */
+  completeJob(tenantId: string, jobId: string, status: 'done' | 'failed', error: string | null = null): Promise<void> {
+    return withTenant(tenantId, async (c) => {
+      await c.query(
+        `UPDATE transcription_jobs SET status = $2, last_error = $3, updated_at = now() WHERE id = $1`,
+        [jobId, status, error],
+      );
+    });
+  }
+
+  /**
+   * Crash recovery: any job stuck in 'processing' past the stale window (its worker died) is reset to
+   * 'pending' so it will be picked up again — UNLESS it has already exhausted MAX_JOB_ATTEMPTS, in
+   * which case it is marked 'failed' so it stops looping. Returns how many were re-queued.
+   */
+  recoverStaleJobs(tenantId: string, now: number = Date.now()): Promise<number> {
+    const cutoff = new Date(now - STALE_JOB_MS).toISOString();
+    return withTenant(tenantId, async (c) => {
+      await c.query(
+        `UPDATE transcription_jobs SET status = 'failed', last_error = 'exceeded max attempts', updated_at = now()
+          WHERE status = 'processing' AND updated_at < $1 AND attempts >= $2`,
+        [cutoff, MAX_JOB_ATTEMPTS],
+      );
+      const res = await c.query(
+        `UPDATE transcription_jobs SET status = 'pending', updated_at = now()
+          WHERE status = 'processing' AND updated_at < $1 AND attempts < $2`,
+        [cutoff, MAX_JOB_ATTEMPTS],
+      );
+      return res.rowCount ?? 0;
+    });
+  }
+
+  /** Lists pending jobs for this tenant (FIFO) so a worker can drain them. */
+  listPendingJobs(tenantId: string, limit = 20): Promise<TranscriptionJob[]> {
+    const capped = Math.min(Math.max(Math.trunc(limit) || 20, 1), 200);
+    return withTenant(tenantId, async (c) => {
+      const res = await c.query<{ id: string; object_id: string; status: TranscriptionJob['status']; attempts: number }>(
+        `SELECT id, object_id, status, attempts FROM transcription_jobs
+          WHERE status = 'pending' ORDER BY created_at ASC LIMIT $1`,
+        [capped],
+      );
+      return res.rows.map((r) => ({ id: r.id, objectId: r.object_id, status: r.status, attempts: r.attempts }));
     });
   }
 

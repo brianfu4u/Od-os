@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { classifyMime, detectObjectType, detectSubKind, validateUpload, SIZE_LIMITS } from './uploads.validation';
+import {
+  classifyMime,
+  detectObjectType,
+  detectSubKind,
+  fileExtension,
+  looksExecutable,
+  validateUpload,
+  SIZE_LIMITS,
+} from './uploads.validation';
 
 describe('classifyMime', () => {
   it('categorizes allowed types and rejects others', () => {
@@ -48,5 +56,41 @@ describe('validateUpload', () => {
     // an audio file at 15MB is fine (20MB cap) though it would exceed the image cap
     expect(validateUpload('audio/mpeg', 15 * 1024 * 1024)).toBeNull();
     expect(validateUpload('audio/webm;codecs=opus', SIZE_LIMITS.audio + 1)).toMatch(/exceeds/);
+  });
+
+  it('enforces the per-category extension allowlist when a filename is given', () => {
+    expect(validateUpload('image/png', 1024, 'photo.png')).toBeNull();
+    expect(validateUpload('audio/mp4', 1024, 'note.m4a')).toBeNull();
+    expect(validateUpload('application/pdf', 1024, 'report.pdf')).toBeNull();
+    // Right MIME, wrong/disallowed extension → rejected (defense in depth against spoofing).
+    expect(validateUpload('image/png', 1024, 'evil.exe')).toMatch(/extension/);
+    expect(validateUpload('image/png', 1024, 'noext')).toMatch(/extension/);
+    expect(validateUpload('application/pdf', 1024, 'macro.docm')).toMatch(/extension/);
+  });
+
+  it('rejects executable payloads by magic bytes even with an allowed type + extension', () => {
+    const pe = Buffer.from([0x4d, 0x5a, 0x90, 0x00]); // 'MZ' Windows PE
+    const elf = Buffer.from([0x7f, 0x45, 0x4c, 0x46]); // ELF
+    expect(validateUpload('image/png', 1024, 'photo.png', pe)).toMatch(/executable/);
+    expect(validateUpload('application/pdf', 1024, 'report.pdf', elf)).toMatch(/executable/);
+    // A benign PNG buffer with an allowed name passes all four checks.
+    expect(validateUpload('image/png', 1024, 'photo.png', Buffer.from([0x89, 0x50, 0x4e, 0x47]))).toBeNull();
+  });
+});
+
+describe('fileExtension / looksExecutable', () => {
+  it('extracts a lower-cased extension', () => {
+    expect(fileExtension('a.PNG')).toBe('png');
+    expect(fileExtension('archive.tar.gz')).toBe('gz');
+    expect(fileExtension('noext')).toBe('');
+    expect(fileExtension('.hidden')).toBe('');
+    expect(fileExtension(undefined)).toBe('');
+  });
+  it('flags executables and shebangs, not media', () => {
+    expect(looksExecutable(Buffer.from([0x4d, 0x5a, 0x00, 0x00]))).toBe(true); // MZ
+    expect(looksExecutable(Buffer.from('#!/bin/sh\n'))).toBe(true); // shebang
+    expect(looksExecutable(Buffer.from([0x89, 0x50, 0x4e, 0x47]))).toBe(false); // PNG
+    expect(looksExecutable(Buffer.from([0x00]))).toBe(false); // too short
+    expect(looksExecutable(undefined)).toBe(false);
   });
 });
