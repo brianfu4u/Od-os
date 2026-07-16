@@ -161,7 +161,11 @@ export class VerificationRepository {
       }
       const result: VerificationResult = { ...scored, triggered };
 
-      // Persist: object's verified slot (S2 owns verified_state + verification_score).
+      // Persist: object's verified slot (S2 owns verified_state + verification_score). The
+      // transaction-local flag authorizes the DB-level verdict guard (0021) for this write only;
+      // SET LOCAL resets at
+      // COMMIT/ROLLBACK so it never leaks to another statement or pooled connection.
+      await c.query(`SET LOCAL app.verification_write = 'true'`);
       await c.query(`UPDATE objects SET verified_state = $2, verification_score = $3 WHERE id = $1`, [
         objectId,
         result.verifiedState,
@@ -250,6 +254,9 @@ export class VerificationRepository {
         ),
       ];
 
+      // Human verdict correction is still an S2-owned verified_state write — authorize the DB guard
+      // (0021) for this transaction only.
+      await c.query(`SET LOCAL app.verification_write = 'true'`);
       await c.query(`UPDATE objects SET verified_state = $2 WHERE id = $1`, [objectId, toState]);
       await c.query(
         `INSERT INTO verification_ledger (tenant_id, object_id, verified_state, verification_score, evidence, reason)

@@ -59,10 +59,14 @@ async function main(): Promise<void> {
 
     const updated = await repo.update(A, created.id, {
       claimedState: 'ready',
-      verificationScore: 0.8,
       properties: { note: 'x' },
     });
-    check(updated?.claimedState === 'ready' && updated?.verificationScore === 0.8, 'update sets state triplet');
+    check(updated?.claimedState === 'ready', 'update sets claim/expectation');
+    // P0-1: the generic update path must NOT write the verdict; the fresh score remains null.
+    check(
+      updated?.verifiedState === null && updated?.verificationScore === null,
+      'update does NOT touch verified_state/verification_score (S2-owned)',
+    );
     check(
       updated?.properties.taskType === 'room_turnover' && updated?.properties.note === 'x',
       'update shallow-merges properties',

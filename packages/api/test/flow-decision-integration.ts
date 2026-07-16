@@ -93,8 +93,10 @@ async function main(): Promise<void> {
     check(f0.flow_state === 'pending', 'a new flow starts in pending state');
     check(f0.verified_state === null, 'created task has verified_state null (S2 moat)');
 
-    // Manually stamp a verified_state to prove decide() never touches it later (reference data only).
+    // Test fixture: use the same transaction-local authorization as S2 to stamp reference data,
+    // then prove decide() never touches it later. This is setup, not a production verdict path.
     await withTenant(A, async (c) => {
+      await c.query(`SET LOCAL app.verification_write = 'true'`);
       await c.query(`UPDATE objects SET verified_state = 'below_target', verification_score = 0.42 WHERE id = $1`, [taskId]);
     });
 
