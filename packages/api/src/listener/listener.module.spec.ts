@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { makeListener } from './listener.module';
+import { makeEvidenceExtractor, makeListener } from './listener.module';
 
 /**
  * P1-6-c · boot-selection guardrail for the LLM1 adapter. makeListener reads process.env directly,
@@ -46,5 +46,33 @@ describe('makeListener — external LLM selection + compliance downgrade', () =>
     process.env.DEEPSEEK_API_KEY = 'sk-test';
     process.env.COMPLIANCE_EXTERNAL_PROVIDERS = 'on';
     expect(makeListener().name).toBe('deepseek');
+  });
+});
+
+describe('makeEvidenceExtractor — T-13A fail-closed provider selection', () => {
+  let saved: Record<string, string | undefined>;
+  beforeEach(() => {
+    saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
+    for (const k of KEYS) delete process.env[k];
+  });
+  afterEach(() => {
+    for (const k of KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  it('keyless uses an unavailable adapter, never a heuristic extractor', () => {
+    expect(makeEvidenceExtractor().name).toBe('unavailable');
+  });
+
+  it('selects DeepSeek only when external processing is enabled and keyed', () => {
+    process.env.DEEPSEEK_API_KEY = 'sk-test';
+    expect(makeEvidenceExtractor().name).toBe('deepseek');
+    process.env.LLM_LISTENER = 'heuristic';
+    expect(makeEvidenceExtractor().name).toBe('unavailable');
+    delete process.env.LLM_LISTENER;
+    process.env.COMPLIANCE_EXTERNAL_PROVIDERS = 'off';
+    expect(makeEvidenceExtractor().name).toBe('unavailable');
   });
 });
