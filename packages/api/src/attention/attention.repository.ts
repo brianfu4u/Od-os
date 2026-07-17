@@ -104,8 +104,14 @@ export class AttentionRepository {
       const scanAt = row?.scanned_at ? new Date(row.scanned_at).toISOString() : null;
       // Resolve the raw code via the side-store (live only). Absent scan row → absent; scan exists but
       // its live payload is gone (swept/redacted, or never mirrored) → redacted.
-      const scanCode = row ? await this.sensitive.readLivePayload(c, tenantId, 'patient_scans', row.id, 'patient_code') : null;
-      const reason = row ? (scanCode === null ? ('redacted' as const) : undefined) : ('absent' as const);
+      const scanCode = row
+        ? await this.sensitive.readLivePayload(c, tenantId, 'patient_scans', row.id, 'patient_code')
+        : null;
+      const reason = row
+        ? scanCode === null
+          ? ('redacted' as const)
+          : undefined
+        : ('absent' as const);
 
       // Append the access event on THIS write operation (never on the GET queue read — P1-5 invariant).
       // object_id = the Staff object (valid objects FK); the scan id lives in payload for traceability.
@@ -143,8 +149,7 @@ export class AttentionRepository {
       secondsSinceLastScan: num(row.secs_since_scan),
       secondsSinceScanFollowup: num(row.secs_since_followup),
       verificationResult: row.verification_result,
-      verificationScore:
-        row.verification_score === null ? null : Number(row.verification_score),
+      verificationScore: row.verification_score === null ? null : Number(row.verification_score),
       nowIso,
     };
   }
@@ -172,9 +177,20 @@ export class AttentionRepository {
           ORDER BY employee_id, scanned_at DESC
        ),
        last_claim AS (
-         SELECT DISTINCT ON (employee_id) employee_id, verification_result, verification_score
+         SELECT DISTINCT ON (employee_id) id, employee_id
            FROM employee_status_claims
-          ORDER BY employee_id, claimed_at DESC
+          ORDER BY employee_id, created_at DESC, claimed_at DESC, id DESC
+       ),
+       last_verification AS (
+         SELECT lc.employee_id, v.verification_result, v.verification_score
+           FROM last_claim lc
+           LEFT JOIN LATERAL (
+             SELECT verification_result, verification_score
+               FROM employee_status_verification_ledger
+              WHERE claim_id = lc.id
+              ORDER BY created_at DESC, id DESC
+              LIMIT 1
+           ) v ON true
        )
        SELECT
          s.id                                                        AS employee_id,
@@ -195,12 +211,12 @@ export class AttentionRepository {
               AND ls.scanned_at IS NOT NULL
               AND e.created_at > ls.scanned_at
          )                                                           AS secs_since_followup,
-         lc.verification_result                                      AS verification_result,
-         lc.verification_score                                  AS verification_score
+         lv.verification_result                                      AS verification_result,
+         lv.verification_score                                       AS verification_score
        FROM staff s
        LEFT JOIN fresh f      ON f.employee_id = s.id
        LEFT JOIN last_scan ls ON ls.employee_id = s.id
-       LEFT JOIN last_claim lc ON lc.employee_id = s.id`,
+       LEFT JOIN last_verification lv ON lv.employee_id = s.id`,
     );
     return res.rows;
   }

@@ -3,6 +3,8 @@ import { ObjectsModule } from '../objects/objects.module';
 import { EmployeeStatusController } from './employee-status.controller';
 import { EmployeeStatusService } from './employee-status.service';
 import { EmployeeStatusRepository } from './employee-status.repository';
+import { EmployeeStatusVerificationRepository } from './employee-status-verification.repository';
+import { EmployeeStatusVerificationService } from './employee-status-verification.service';
 
 /**
  * T-04 · employee work-status (feat/business-flow-p0, Stage 2). Additive NEW module: writes only the
@@ -16,6 +18,12 @@ import { EmployeeStatusRepository } from './employee-status.repository';
 @Module({
   imports: [ObjectsModule],
   controllers: [EmployeeStatusController],
-  providers: [EmployeeStatusService, EmployeeStatusRepository],
+  providers: [
+    EmployeeStatusService,
+    EmployeeStatusRepository,
+    EmployeeStatusVerificationService,
+    EmployeeStatusVerificationRepository,
+  ],
+  exports: [EmployeeStatusVerificationService],
 })
 export class EmployeeStatusModule {}
