@@ -88,12 +88,47 @@ export class SensitivePayloadsRepository {
   }
 
   /**
+   * T-13A fail-closed read with retention state. Like readLivePayload(), this NEVER reads the
+   * append-only source column. The explicit state lets an evidence consumer distinguish "missing"
+   * from "redacted" without weakening KI-001's no-fallback rule.
+   */
+  async readLivePayloadState(
+    c: PoolClient,
+    tenantId: string,
+    sourceTable: string,
+    sourceId: string,
+    field: string,
+  ): Promise<
+    | { state: 'live'; content: string }
+    | { state: 'redacted'; content: null }
+    | { state: 'missing'; content: null }
+  > {
+    const res = await c.query<{ content: string | null; redacted_at: string | null }>(
+      `SELECT content, redacted_at
+         FROM sensitive_payloads
+        WHERE tenant_id = $1 AND source_table = $2 AND source_id = $3 AND field = $4
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [tenantId, sourceTable, sourceId, field],
+    );
+    const row = res.rows[0];
+    if (!row) return { state: 'missing', content: null };
+    if (row.redacted_at !== null || row.content === null) {
+      return { state: 'redacted', content: null };
+    }
+    return { state: 'live', content: row.content };
+  }
+
+  /**
    * Retention sweep: redact every LIVE payload older than the configured window, using the 0020
    * redact-only primitive (content + content_jsonb → NULL, redacted_at stamped once). Idempotent —
    * already-redacted rows (redacted_at IS NOT NULL) are excluded, so a re-run redacts nothing new.
    * The append-only skeleton is untouched. Returns the count redacted.
    */
-  async sweep(tenantId: string, env: Record<string, string | undefined> = process.env): Promise<{ redacted: number }> {
+  async sweep(
+    tenantId: string,
+    env: Record<string, string | undefined> = process.env,
+  ): Promise<{ redacted: number }> {
     const { rawContentDays } = resolveRetentionConfig(env);
     return withTenant(tenantId, async (c) => {
       const res = await c.query<{ id: string }>(
